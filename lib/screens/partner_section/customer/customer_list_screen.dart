@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 
 import '../../../../constants/app_colors.dart';
-import '../../../../constants/asset_constants.dart';
 import '../../../../constants/theme/app_text_styles.dart';
 import '../../../../utils/currency_formatter.dart';
 import '../leads/add_new_lead_screen.dart';
@@ -274,7 +273,7 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
 
   Widget _buildMetricBadgesStrip() {
     final metrics = [
-      {'val': '48', 'label': 'Total Customers', 'icon': Icons.groups_rounded, 'color': const Color(0xFF0284C7), 'bg': const Color(0xFFEFF6FF)},
+      {'val': '48', 'label': 'TotalCustomr', 'icon': Icons.groups_rounded, 'color': const Color(0xFF0284C7), 'bg': const Color(0xFFEFF6FF)},
       {'val': '18', 'label': 'Pending', 'icon': Icons.access_time_rounded, 'color': const Color(0xFFD97706), 'bg': const Color(0xFFFEF3C7)},
       {'val': '22', 'label': 'Approved', 'icon': Icons.check_circle_rounded, 'color': AppColors.secondary, 'bg': const Color(0xFFDCFCE7)},
       {'val': '8', 'label': 'Rejected', 'icon': Icons.cancel_rounded, 'color': const Color(0xFFDC2626), 'bg': const Color(0xFFFEE2E2)},
@@ -287,7 +286,7 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
 
         return Expanded(
           child: Container(
-            margin: const EdgeInsets.symmetric(horizontal: 2),
+            // margin: const EdgeInsets.symmetric(horizontal: ),
             padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
             decoration: BoxDecoration(
               color: Colors.white,

@@ -508,8 +508,9 @@ class _AddNewLeadScreenState extends State<AddNewLeadScreen> {
                 ),
               ),
             ),
-            const SizedBox(width: 10),
-            Expanded(
+
+            SizedBox(
+              width: 200,
               child: DropdownButtonFormField<String>(
                 value: _selectedTenure,
                 decoration: _fieldDecoration(
@@ -518,11 +519,21 @@ class _AddNewLeadScreenState extends State<AddNewLeadScreen> {
                   icon: Icons.bar_chart_rounded,
                 ),
                 items: _tenureOptions
-                    .map((t) => DropdownMenuItem(value: t, child: Text(t, style: const TextStyle(fontSize: 12.5))))
+                    .map(
+                      (t) => DropdownMenuItem(
+                    value: t,
+                    child: Text(
+                      t,
+                      style: const TextStyle(fontSize: 12.5),
+                    ),
+                  ),
+                )
                     .toList(),
-                onChanged: (val) => setState(() => _selectedTenure = val),
+                onChanged: (val) {
+                  setState(() => _selectedTenure = val);
+                },
               ),
-            ),
+            )
           ],
         ),
         const SizedBox(height: 12),

@@ -140,53 +140,7 @@ class _HelpSupportScreenState extends State<HelpSupportScreen> {
           ),
         ),
       ),
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: 3, // Help & Support tab active
-        backgroundColor: Colors.white,
-        elevation: 4,
-        indicatorColor: const Color(0xFFDCFCE7),
-        onDestinationSelected: (index) {
-          if (index == 3) return;
 
-          if (index == 0) {
-            Navigator.pushReplacement(
-              context,
-              MaterialPageRoute(builder: (_) => const PartnerDashboardScreen()),
-            );
-          } else if (index == 1) {
-            Navigator.pushReplacement(
-              context,
-              MaterialPageRoute(builder: (_) => const MyLeadsScreen()),
-            );
-          } else if (index == 2) {
-            Navigator.pushReplacement(
-              context,
-              MaterialPageRoute(builder: (_) => const NotificationsScreen()),
-            );
-          }
-        },
-        destinations: const [
-          NavigationDestination(
-            icon: Icon(Icons.home_outlined),
-            selectedIcon: Icon(Icons.home, color: Color(0xFF16A36A)),
-            label: 'Dashboard',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.description_outlined),
-            selectedIcon: Icon(Icons.description, color: Color(0xFF16A36A)),
-            label: 'My Leads',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.notifications_outlined),
-            selectedIcon: Icon(Icons.notifications_rounded, color: Color(0xFF16A36A)),
-            label: 'Notifications',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.headset_mic_rounded, color: Color(0xFF16A36A)),
-            label: 'Help & Support',
-          ),
-        ],
-      ),
     );
   }
 
