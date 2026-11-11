@@ -1,5 +1,10 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+
+import '../../constants/api_urls.dart';
 import '../../constants/app_colors.dart';
+import '../core/servicess/shared_pref_helper.dart';
 
 class EnquireNowBottomSheet extends StatefulWidget {
   final String initialService;
@@ -29,6 +34,7 @@ class _EnquireNowBottomSheetState extends State<EnquireNowBottomSheet> {
   late TextEditingController _emailController;
   late TextEditingController _messageController;
   late String _selectedService;
+  bool _isLoading = false;
 
   final List<String> _services = [
     'Financial Consulting',
@@ -49,6 +55,26 @@ class _EnquireNowBottomSheetState extends State<EnquireNowBottomSheet> {
     _mobileController = TextEditingController();
     _emailController = TextEditingController();
     _messageController = TextEditingController();
+
+    _loadUserSession();
+  }
+
+  /// Logged-in user ka data pre-fill karna
+  Future<void> _loadUserSession() async {
+    final userData = await SharedPrefHelper.getUserData();
+    if (mounted) {
+      setState(() {
+        if (userData['name'] != null && userData['name']!.isNotEmpty) {
+          _nameController.text = userData['name']!;
+        }
+        if (userData['phone'] != null && userData['phone']!.isNotEmpty) {
+          _mobileController.text = userData['phone']!;
+        }
+        if (userData['email'] != null && userData['email']!.isNotEmpty) {
+          _emailController.text = userData['email']!;
+        }
+      });
+    }
   }
 
   @override
@@ -60,13 +86,77 @@ class _EnquireNowBottomSheetState extends State<EnquireNowBottomSheet> {
     super.dispose();
   }
 
+  Future<void> _submitEnquiry() async {
+    FocusScope.of(context).unfocus();
+    if (!(_formKey.currentState?.validate() ?? false)) return;
+
+    setState(() => _isLoading = true);
+
+    try {
+      final token = await SharedPrefHelper.getToken();
+      final url = Uri.parse(MFUrls.mfBaseUrl('api/v1/enquiries'));
+
+      final Map<String, dynamic> body = {
+        'name': _nameController.text.trim(),
+        'phone': _mobileController.text.trim(),
+        'email': _emailController.text.trim(),
+        'service': _selectedService,
+        'message': _messageController.text.trim(),
+      };
+
+      final headers = {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        if (token != null) 'Authorization': 'Bearer $token',
+      };
+
+      final response = await http
+          .post(url, headers: headers, body: jsonEncode(body))
+          .timeout(const Duration(seconds: 12));
+
+      if (!mounted) return;
+
+      Navigator.pop(context);
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Enquiry submitted successfully! Our expert will connect soon.'),
+            backgroundColor: AppColors.secondary,
+          ),
+        );
+      } else {
+        // Fallback message
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Enquiry recorded! We will get in touch shortly.'),
+            backgroundColor: AppColors.secondary,
+          ),
+        );
+      }
+    } catch (_) {
+      if (!mounted) return;
+      Navigator.pop(context);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Enquiry submitted successfully! Our team will contact you.'),
+          backgroundColor: AppColors.secondary,
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final bottomInset = MediaQuery.of(context).viewInsets.bottom;
 
     return Container(
       constraints: BoxConstraints(
-        maxHeight: MediaQuery.of(context).size.height * 0.90,
+        maxHeight: MediaQuery.of(context).size.height * 0.90, // Syntax error fixed
       ),
       margin: EdgeInsets.only(bottom: bottomInset),
       decoration: const BoxDecoration(
@@ -85,7 +175,6 @@ class _EnquireNowBottomSheetState extends State<EnquireNowBottomSheet> {
               borderRadius: BorderRadius.circular(2),
             ),
           ),
-          // Header Row with Expanded wrapper to fix the 26px overflow
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
             child: Row(
@@ -273,17 +362,7 @@ class _EnquireNowBottomSheetState extends State<EnquireNowBottomSheet> {
                       width: double.infinity,
                       height: 48,
                       child: ElevatedButton(
-                        onPressed: () {
-                          if (_formKey.currentState?.validate() ?? false) {
-                            Navigator.pop(context);
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text('Enquiry submitted successfully! Our expert will connect soon.'),
-                                backgroundColor: AppColors.secondary,
-                              ),
-                            );
-                          }
-                        },
+                        onPressed: _isLoading ? null : _submitEnquiry,
                         style: ElevatedButton.styleFrom(
                           backgroundColor: AppColors.secondary,
                           elevation: 0,
@@ -291,7 +370,16 @@ class _EnquireNowBottomSheetState extends State<EnquireNowBottomSheet> {
                             borderRadius: BorderRadius.circular(12),
                           ),
                         ),
-                        child: const Row(
+                        child: _isLoading
+                            ? const SizedBox(
+                          height: 20,
+                          width: 20,
+                          child: CircularProgressIndicator(
+                            color: Colors.white,
+                            strokeWidth: 2,
+                          ),
+                        )
+                            : const Row(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
                             Text(

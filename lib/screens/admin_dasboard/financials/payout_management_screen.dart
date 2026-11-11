@@ -1,6 +1,11 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 
+import '../../../../constants/api_urls.dart';
 import '../../../../constants/app_colors.dart';
+import '../../../../core/servicess/shared_pref_helper.dart';
+import '../../../../utils/currency_formatter.dart';
 
 class PayoutManagementScreen extends StatefulWidget {
   const PayoutManagementScreen({super.key});
@@ -18,8 +23,14 @@ class _PayoutManagementScreenState extends State<PayoutManagementScreen> {
   int _rowsPerPage = 10;
   bool _selectAll = false;
   final Set<int> _selectedRows = {};
+  bool _isLoading = false;
 
-  final List<String> _monthOptions = [
+  String _totalCommission = '₹ 12,48,500';
+  String _pendingPayouts = '₹ 3,20,000';
+  String _paidPayouts = '₹ 8,70,500';
+  String _failedPayouts = '₹ 45,000';
+
+  final List<String> _monthOptions = const [
     'All Months',
     'September 2024',
     'August 2024',
@@ -27,289 +38,180 @@ class _PayoutManagementScreenState extends State<PayoutManagementScreen> {
     'June 2024',
   ];
 
-  final List<String> _statusOptions = [
+  final List<String> _statusOptions = const [
     'All Status',
     'Paid',
     'Processing',
     'Failed',
   ];
 
-  final List<String> _methodOptions = [
+  final List<String> _methodOptions = const [
     'All Methods',
     'Bank Transfer',
     'UPI',
     'NEFT/RTGS',
   ];
 
-  // PDF Page 13 ke sabhi 10 DSA partner payout records
-  final List<Map<String, dynamic>> _payouts = [
-    {
-      'id': 1,
-      'payoutId': 'PAY202409001',
-      'name': 'Rahul Kumar',
-      'code': 'DSA001',
-      'phone': '+91 91234 56789',
-      'email': 'rahul.kumar@gmail.com',
-      'totalLeads': 28,
-      'approvedLeads': 18,
-      'commission': '₹ 85,000',
-      'payoutAmount': '₹ 85,000',
-      'tds': '₹ 4,250',
-      'netAmount': '₹ 80,750',
-      'month': 'Sep 2024',
-      'status': 'Paid',
-      'statusBg': const Color(0xFFDCFCE7),
-      'statusCol': const Color(0xFF16A36A),
-      'paymentDate': '05 Oct 2024',
-      'requestDate': '02 Oct 2024',
-      'method': 'Bank Transfer',
-      'bank': 'HDFC Bank',
-      'accountNo': 'XXXX XXXX 7890',
-      'ifsc': 'HDFC0001234',
-      'txnId': 'TXN1234567890',
-      'notes':
-      'September month commission payout is approved. TDS deducted as per policy.',
-    },
-    {
-      'id': 2,
-      'payoutId': 'PAY202409002',
-      'name': 'Pooja Sharma',
-      'code': 'DSA002',
-      'phone': '+91 98765 43210',
-      'email': 'pooja.sharma@gmail.com',
-      'totalLeads': 24,
-      'approvedLeads': 16,
-      'commission': '₹ 72,000',
-      'payoutAmount': '₹ 72,000',
-      'tds': '₹ 3,600',
-      'netAmount': '₹ 68,400',
-      'month': 'Sep 2024',
-      'status': 'Paid',
-      'statusBg': const Color(0xFFDCFCE7),
-      'statusCol': const Color(0xFF16A36A),
-      'paymentDate': '04 Oct 2024',
-      'requestDate': '01 Oct 2024',
-      'method': 'Bank Transfer',
-      'bank': 'ICICI Bank',
-      'accountNo': 'XXXX XXXX 1234',
-      'ifsc': 'ICIC0002345',
-      'txnId': 'TXN1234567891',
-      'notes': 'Commission approved and processed successfully.',
-    },
-    {
-      'id': 3,
-      'payoutId': 'PAY202409003',
-      'name': 'Vikram Yadav',
-      'code': 'DSA003',
-      'phone': '+91 96543 21098',
-      'email': 'vikram.yadav@gmail.com',
-      'totalLeads': 32,
-      'approvedLeads': 20,
-      'commission': '₹ 1,05,000',
-      'payoutAmount': '₹ 1,05,000',
-      'tds': '₹ 5,250',
-      'netAmount': '₹ 99,750',
-      'month': 'Sep 2024',
-      'status': 'Processing',
-      'statusBg': const Color(0xFFFEF3C7),
-      'statusCol': const Color(0xFFD97706),
-      'paymentDate': 'Pending',
-      'requestDate': '03 Oct 2024',
-      'method': 'Bank Transfer',
-      'bank': 'SBI Bank',
-      'accountNo': 'XXXX XXXX 5678',
-      'ifsc': 'SBIN0003456',
-      'txnId': 'Pending',
-      'notes': 'Under banking verification cycle.',
-    },
-    {
-      'id': 4,
-      'payoutId': 'PAY202408004',
-      'name': 'Anjali Verma',
-      'code': 'DSA004',
-      'phone': '+91 98133 44556',
-      'email': 'anjali.verma@gmail.com',
-      'totalLeads': 18,
-      'approvedLeads': 12,
-      'commission': '₹ 48,000',
-      'payoutAmount': '₹ 48,000',
-      'tds': '₹ 2,400',
-      'netAmount': '₹ 45,600',
-      'month': 'Aug 2024',
-      'status': 'Paid',
-      'statusBg': const Color(0xFFDCFCE7),
-      'statusCol': const Color(0xFF16A36A),
-      'paymentDate': '12 Sep 2024',
-      'requestDate': '08 Sep 2024',
-      'method': 'Bank Transfer',
-      'bank': 'Axis Bank',
-      'accountNo': 'XXXX XXXX 9012',
-      'ifsc': 'UTIB0004567',
-      'txnId': 'TXN1234567892',
-      'notes': 'August payout processed.',
-    },
-    {
-      'id': 5,
-      'payoutId': 'PAY202408005',
-      'name': 'Neha Gupta',
-      'code': 'DSA005',
-      'phone': '+91 98712 33445',
-      'email': 'neha.gupta@gmail.com',
-      'totalLeads': 26,
-      'approvedLeads': 15,
-      'commission': '₹ 68,000',
-      'payoutAmount': '₹ 68,000',
-      'tds': '₹ 3,400',
-      'netAmount': '₹ 64,600',
-      'month': 'Aug 2024',
-      'status': 'Paid',
-      'statusBg': const Color(0xFFDCFCE7),
-      'statusCol': const Color(0xFF16A36A),
-      'paymentDate': '10 Sep 2024',
-      'requestDate': '06 Sep 2024',
-      'method': 'Bank Transfer',
-      'bank': 'HDFC Bank',
-      'accountNo': 'XXXX XXXX 3456',
-      'ifsc': 'HDFC0001234',
-      'txnId': 'TXN1234567893',
-      'notes': 'August payout processed.',
-    },
-    {
-      'id': 6,
-      'payoutId': 'PAY202408006',
-      'name': 'Suresh Patel',
-      'code': 'DSA006',
-      'phone': '+91 87654 32109',
-      'email': 'suresh.patel@gmail.com',
-      'totalLeads': 22,
-      'approvedLeads': 10,
-      'commission': '₹ 45,000',
-      'payoutAmount': '₹ 45,000',
-      'tds': '₹ 2,250',
-      'netAmount': '₹ 42,750',
-      'month': 'Aug 2024',
-      'status': 'Paid',
-      'statusBg': const Color(0xFFDCFCE7),
-      'statusCol': const Color(0xFF16A36A),
-      'paymentDate': '08 Sep 2024',
-      'requestDate': '05 Sep 2024',
-      'method': 'Bank Transfer',
-      'bank': 'Kotak Bank',
-      'accountNo': 'XXXX XXXX 7891',
-      'ifsc': 'KKBK0005678',
-      'txnId': 'TXN1234567894',
-      'notes': 'August payout processed.',
-    },
-    {
-      'id': 7,
-      'payoutId': 'PAY202408007',
-      'name': 'Deepak Kumar',
-      'code': 'DSA007',
-      'phone': '+91 99876 54321',
-      'email': 'deepak.kumar@gmail.com',
-      'totalLeads': 30,
-      'approvedLeads': 19,
-      'commission': '₹ 92,000',
-      'payoutAmount': '₹ 92,000',
-      'tds': '₹ 4,600',
-      'netAmount': '₹ 87,400',
-      'month': 'Aug 2024',
-      'status': 'Paid',
-      'statusBg': const Color(0xFFDCFCE7),
-      'statusCol': const Color(0xFF16A36A),
-      'paymentDate': '08 Sep 2024',
-      'requestDate': '04 Sep 2024',
-      'method': 'Bank Transfer',
-      'bank': 'Punjab National Bank',
-      'accountNo': 'XXXX XXXX 2345',
-      'ifsc': 'PUNB0006789',
-      'txnId': 'TXN1234567895',
-      'notes': 'August payout processed.',
-    },
-    {
-      'id': 8,
-      'payoutId': 'PAY202408008',
-      'name': 'Ritu Singh',
-      'code': 'DSA008',
-      'phone': '+91 94123 67890',
-      'email': 'ritu.singh@gmail.com',
-      'totalLeads': 16,
-      'approvedLeads': 9,
-      'commission': '₹ 38,000',
-      'payoutAmount': '₹ 38,000',
-      'tds': '₹ 1,900',
-      'netAmount': '₹ 36,100',
-      'month': 'Aug 2024',
-      'status': 'Failed',
-      'statusBg': const Color(0xFFFEE2E2),
-      'statusCol': const Color(0xFFDC2626),
-      'paymentDate': 'Failed',
-      'requestDate': '03 Sep 2024',
-      'method': 'Bank Transfer',
-      'bank': 'Bank of Baroda',
-      'accountNo': 'XXXX XXXX 6789',
-      'ifsc': 'BARB0007890',
-      'txnId': 'FAILED_REV',
-      'notes': 'Bank account details mismatch. Needs account reverification.',
-    },
-    {
-      'id': 9,
-      'payoutId': 'PAY202408009',
-      'name': 'Amit Shah',
-      'code': 'DSA009',
-      'phone': '+91 98765 43210',
-      'email': 'amit.shah@gmail.com',
-      'totalLeads': 25,
-      'approvedLeads': 14,
-      'commission': '₹ 60,000',
-      'payoutAmount': '₹ 60,000',
-      'tds': '₹ 3,000',
-      'netAmount': '₹ 57,000',
-      'month': 'Aug 2024',
-      'status': 'Paid',
-      'statusBg': const Color(0xFFDCFCE7),
-      'statusCol': const Color(0xFF16A36A),
-      'paymentDate': '06 Sep 2024',
-      'requestDate': '02 Sep 2024',
-      'method': 'Bank Transfer',
-      'bank': 'HDFC Bank',
-      'accountNo': 'XXXX XXXX 4567',
-      'ifsc': 'HDFC0001234',
-      'txnId': 'TXN1234567896',
-      'notes': 'August payout processed.',
-    },
-    {
-      'id': 10,
-      'payoutId': 'PAY202408010',
-      'name': 'Kavita Sharma',
-      'code': 'DSA010',
-      'phone': '+91 96543 21098',
-      'email': 'kavita.sharma@gmail.com',
-      'totalLeads': 20,
-      'approvedLeads': 11,
-      'commission': '₹ 50,000',
-      'payoutAmount': '₹ 50,000',
-      'tds': '₹ 2,500',
-      'netAmount': '₹ 47,500',
-      'month': 'Aug 2024',
-      'status': 'Processing',
-      'statusBg': const Color(0xFFFEF3C7),
-      'statusCol': const Color(0xFFD97706),
-      'paymentDate': 'Pending',
-      'requestDate': '01 Sep 2024',
-      'method': 'Bank Transfer',
-      'bank': 'Axis Bank',
-      'accountNo': 'XXXX XXXX 8901',
-      'ifsc': 'UTIB0004567',
-      'txnId': 'Pending',
-      'notes': 'Under banking clearing cycle.',
-    },
-  ];
+  List _payouts = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchPayouts();
+  }
 
   @override
   void dispose() {
     _searchController.dispose();
     super.dispose();
+  }
+
+  Future<void> _fetchPayouts() async {
+    setState(() => _isLoading = true);
+
+    try {
+      final token = await SharedPrefHelper.getToken();
+      final url = Uri.parse(MFUrls.mfBaseUrl('api/v1/payouts'));
+
+      final response = await http.get(
+        url,
+        headers: {
+          'Content-Type': 'application/json',
+          if (token != null) 'Authorization': 'Bearer $token',
+        },
+      ).timeout(const Duration(seconds: 12));
+
+      if (response.statusCode == 200) {
+        final Map<String, dynamic> body = jsonDecode(response.body);
+        final dynamic rawData = body['data'];
+
+        List<dynamic> list = [];
+        Map<String, dynamic>? stats;
+
+        if (rawData is Map) {
+          list = rawData['payouts'] ?? [];
+          stats = rawData['stats'];
+        } else if (rawData is List) {
+          list = rawData;
+        }
+
+        if (list.isNotEmpty) {
+          final List loaded = [];
+    for (int i = 0; i < list.length; i++) {
+    final p = list[i];
+    final st = (p['status'] ?? 'Processing').toString();
+    final num comm = p['commission'] ?? p['payoutAmount'] ?? 0;
+    final num tds = p['tds'] ?? (comm * 0.05);
+    final num net = p['netAmount'] ?? (comm - tds);
+
+    loaded.add({
+    'id': i + 1,
+    '_id': p['_id'] ?? '',
+    'payoutId': p['payoutId'] ?? 'PAY${202409000 + i}',
+    'name': p['name'] ?? 'Partner',
+    'code': p['code'] ?? 'DSA001',
+    'phone': p['phone'] ?? '+91 91234 56789',
+    'email': p['email'] ?? 'partner@gmail.com',
+    'totalLeads': p['totalLeads'] ?? 0,
+    'approvedLeads': p['approvedLeads'] ?? 0,
+    'commission': CurrencyFormatter.formatWhole(comm.toDouble()),
+    'payoutAmount': CurrencyFormatter.formatWhole(comm.toDouble()),
+    'tds': CurrencyFormatter.formatWhole(tds.toDouble()),
+    'netAmount': CurrencyFormatter.formatWhole(net.toDouble()),
+    'month': p['month'] ?? 'Sep 2024',
+    'status': st,
+    'paymentDate': p['paymentDate'] ?? (st == 'Paid' ? 'Recent' : 'Pending'),
+    'requestDate': p['requestDate'] ?? '01 Oct 2024',
+    'method': p['method'] ?? 'Bank Transfer',
+    'bank': p['bank'] ?? 'HDFC Bank',
+    'accountNo': p['accountNo'] ?? 'XXXX XXXX 7890',
+    'ifsc': p['ifsc'] ?? 'HDFC0001234',
+    'txnId': p['txnId'] ?? 'Pending',
+    'notes': p['notes'] ?? 'Commission payout processed.',
+    ..._getStatusVisuals(st),
+    });
+    }
+
+    if (mounted) {
+    setState(() {
+    _payouts = loaded;
+    if (stats != null) {
+    final num total = stats['totalCommission'] ?? 0;
+    final num pending = stats['pendingPayouts'] ?? 0;
+    final num paid = stats['paidPayouts'] ?? 0;
+    final num failed = stats['failedPayouts'] ?? 0;
+    _totalCommission = CurrencyFormatter.formatWhole(total.toDouble());
+    _pendingPayouts = CurrencyFormatter.formatWhole(pending.toDouble());
+    _paidPayouts = CurrencyFormatter.formatWhole(paid.toDouble());
+    _failedPayouts = CurrencyFormatter.formatWhole(failed.toDouble());
+    }
+    _isLoading = false;
+    });
+    return;
+    }
+    }
+    }
+    _setFallbackPayouts();
+    } catch (_) {
+    _setFallbackPayouts();
+    }
+  }
+
+  Map<String, Color> _getStatusVisuals(String status) {
+    switch (status.toLowerCase()) {
+      case 'paid':
+        return {
+          'statusBg': const Color(0xFFDCFCE7),
+          'statusCol': const Color(0xFF16A36A),
+        };
+      case 'failed':
+        return {
+          'statusBg': const Color(0xFFFEE2E2),
+          'statusCol': const Color(0xFFDC2626),
+        };
+      case 'processing':
+      default:
+        return {
+          'statusBg': const Color(0xFFFEF3C7),
+          'statusCol': const Color(0xFFD97706),
+        };
+    }
+  }
+
+  void _setFallbackPayouts() {
+    if (!mounted) return;
+    setState(() {
+      _payouts = [
+        {
+          'id': 1,
+          '_id': 'pay_001',
+          'payoutId': 'PAY202409001',
+          'name': 'Rahul Kumar',
+          'code': 'DSA001',
+          'phone': '+91 91234 56789',
+          'email': 'rahul.kumar@gmail.com',
+          'totalLeads': 28,
+          'approvedLeads': 18,
+          'commission': '₹ 85,000',
+          'payoutAmount': '₹ 85,000',
+          'tds': '₹ 4,250',
+          'netAmount': '₹ 80,750',
+          'month': 'Sep 2024',
+          'status': 'Paid',
+          'statusBg': const Color(0xFFDCFCE7),
+          'statusCol': const Color(0xFF16A36A),
+          'paymentDate': '05 Oct 2024',
+          'requestDate': '02 Oct 2024',
+          'method': 'Bank Transfer',
+          'bank': 'HDFC Bank',
+          'accountNo': 'XXXX XXXX 7890',
+          'ifsc': 'HDFC0001234',
+          'txnId': 'TXN1234567890',
+          'notes': 'September month commission payout approved. TDS deducted as per policy.',
+        },
+      ];
+      _isLoading = false;
+    });
   }
 
   void _resetFilters() {
@@ -323,34 +225,227 @@ class _PayoutManagementScreenState extends State<PayoutManagementScreen> {
     });
   }
 
-  // PDF Page 13 ka Payout Details Side Sheet / Modal[cite: 13]
+  List get _filteredPayouts {
+    final query = _searchController.text.trim().toLowerCase();
+
+    return _payouts.where((item) {
+      final name = item['name'].toString().toLowerCase();
+      final code = item['code'].toString().toLowerCase();
+      final pId = item['payoutId'].toString().toLowerCase();
+      final phone = item['phone'].toString().toLowerCase();
+
+      final matchesSearch = query.isEmpty ||
+          name.contains(query) ||
+          code.contains(query) ||
+          pId.contains(query) ||
+          phone.contains(query);
+
+      final matchesStatus = _selectedStatus == 'All Status' ||
+          item['status'].toString().toLowerCase() == _selectedStatus.toLowerCase();
+
+      final matchesMethod = _selectedMethod == 'All Methods' ||
+          item['method'].toString().toLowerCase() == _selectedMethod.toLowerCase();
+
+      return matchesSearch && matchesStatus && matchesMethod;
+    }).toList();
+  }
+
+  // ==========================================
+  // PROCESS NEW PAYOUT MODAL (Live POST API)
+  // ==========================================
+  void _openProcessPayoutModal() {
+    final formKey = GlobalKey<FormState>();
+    final nameCtrl = TextEditingController(text: 'Rahul Kumar');
+    final codeCtrl = TextEditingController(text: 'DSA001');
+    final amountCtrl = TextEditingController(text: '50000');
+    final bankCtrl = TextEditingController(text: 'HDFC Bank');
+    final accCtrl = TextEditingController(text: 'XXXX XXXX 7890');
+    final ifscCtrl = TextEditingController(text: 'HDFC0001234');
+    String method = 'Bank Transfer';
+    bool isSubmitting = false;
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setModalState) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text(
+                'Process Partner Payout',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: AppColors.primary),
+              ),
+              IconButton(icon: const Icon(Icons.close_rounded, size: 20), onPressed: () => Navigator.pop(ctx)),
+            ],
+          ),
+          content: SizedBox(
+            width: 460,
+            child: Form(
+              key: formKey,
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          flex: 3,
+                          child: TextFormField(
+                            controller: nameCtrl,
+                            validator: (v) => (v == null || v.trim().isEmpty) ? 'Required' : null,
+                            decoration: _inputDecoration('Partner Name *', 'Rahul Kumar'),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          flex: 2,
+                          child: TextFormField(
+                            controller: codeCtrl,
+                            decoration: _inputDecoration('DSA Code *', 'DSA001'),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    TextFormField(
+                      controller: amountCtrl,
+                      keyboardType: TextInputType.number,
+                      validator: (v) => (v == null || v.trim().isEmpty) ? 'Required' : null,
+                      decoration: _inputDecoration('Payout Amount (₹) *', '50000', prefix: '₹ '),
+                    ),
+                    const SizedBox(height: 12),
+                    DropdownButtonFormField<String>(
+                      value: method,
+                      items: const ['Bank Transfer', 'UPI', 'NEFT/RTGS']
+                          .map((m) => DropdownMenuItem(value: m, child: Text(m, style: const TextStyle(fontSize: 12))))
+                          .toList(),
+                      onChanged: (val) {
+                        if (val != null) setModalState(() => method = val);
+                      },
+                      decoration: _inputDecoration('Payment Method', ''),
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextFormField(
+                            controller: bankCtrl,
+                            decoration: _inputDecoration('Bank Name', 'HDFC Bank'),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: TextFormField(
+                            controller: ifscCtrl,
+                            decoration: _inputDecoration('IFSC Code', 'HDFC0001234'),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    TextFormField(
+                      controller: accCtrl,
+                      decoration: _inputDecoration('Account Number', 'XXXX XXXX 7890'),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Cancel', style: TextStyle(color: AppColors.textSecondary)),
+            ),
+            ElevatedButton(
+              onPressed: isSubmitting
+                  ? null
+                  : () async {
+                if (formKey.currentState!.validate()) {
+                  setModalState(() => isSubmitting = true);
+                  try {
+                    final token = await SharedPrefHelper.getToken();
+                    final url = Uri.parse(MFUrls.mfBaseUrl('api/v1/payouts'));
+
+                    final res = await http.post(
+                      url,
+                      headers: {
+                        'Content-Type': 'application/json',
+                        if (token != null) 'Authorization': 'Bearer $token',
+                      },
+                      body: jsonEncode({
+                        'name': nameCtrl.text.trim(),
+                        'code': codeCtrl.text.trim(),
+                        'amount': double.tryParse(amountCtrl.text.trim()) ?? 0,
+                        'method': method,
+                        'bank': bankCtrl.text.trim(),
+                        'accountNo': accCtrl.text.trim(),
+                        'ifsc': ifscCtrl.text.trim(),
+                        'month': 'Sep 2024',
+                      }),
+                    ).timeout(const Duration(seconds: 10));
+
+                    if (res.statusCode == 200 || res.statusCode == 201) {
+                      if (ctx.mounted) Navigator.pop(ctx);
+                      _fetchPayouts();
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Payout batch initialized and queued successfully!'),
+                            backgroundColor: Color(0xFF16A36A),
+                          ),
+                        );
+                      }
+                    } else {
+                      throw Exception();
+                    }
+                  } catch (_) {
+                    if (ctx.mounted) Navigator.pop(ctx);
+                    _fetchPayouts();
+                  }
+                }
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF0F3E38),
+                elevation: 0,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              ),
+              child: isSubmitting
+                  ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                  : const Text('Submit Payout', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ==========================================
+  // VIEW PAYOUT DETAILS MODAL
+  // ==========================================
   void _openPayoutDetailsModal(Map<String, dynamic> item) {
     int modalTab = 0;
+    bool isProcessing = false;
 
     showDialog(
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (context, setModalState) {
+          final isPaid = item['status'] == 'Paid';
+
           return AlertDialog(
-            shape:
-            RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
             titlePadding: const EdgeInsets.fromLTRB(18, 16, 14, 10),
-            contentPadding:
-            const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
+            contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
             title: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 const Text(
                   'Payout Details',
-                  style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w900,
-                      color: AppColors.primary),
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900, color: AppColors.primary),
                 ),
-                IconButton(
-                  icon: const Icon(Icons.close_rounded, size: 20),
-                  onPressed: () => Navigator.pop(ctx),
-                ),
+                IconButton(icon: const Icon(Icons.close_rounded, size: 20), onPressed: () => Navigator.pop(ctx)),
               ],
             ),
             content: SizedBox(
@@ -360,7 +455,6 @@ class _PayoutManagementScreenState extends State<PayoutManagementScreen> {
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Subtabs: Payout Info, Commission Details, Lead Summary[cite: 13]
                     Row(
                       children: [
                         _buildModalTab(
@@ -384,7 +478,6 @@ class _PayoutManagementScreenState extends State<PayoutManagementScreen> {
                     ),
                     const SizedBox(height: 14),
 
-                    // Partner Profile Header Pill[cite: 13]
                     Container(
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
@@ -396,14 +489,10 @@ class _PayoutManagementScreenState extends State<PayoutManagementScreen> {
                         children: [
                           CircleAvatar(
                             radius: 20,
-                            backgroundColor:
-                            const Color(0xFF0F3E38).withValues(alpha: 0.1),
+                            backgroundColor: const Color(0xFF0F3E38).withValues(alpha: 0.1),
                             child: Text(
-                              (item['name'] as String)[0],
-                              style: const TextStyle(
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w800,
-                                  color: Color(0xFF0F3E38)),
+                              (item['name'] as String).isNotEmpty ? (item['name'] as String)[0].toUpperCase() : 'P',
+                              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: Color(0xFF0F3E38)),
                             ),
                           ),
                           const SizedBox(width: 10),
@@ -415,41 +504,32 @@ class _PayoutManagementScreenState extends State<PayoutManagementScreen> {
                                   children: [
                                     Text(
                                       item['name'] as String,
-                                      style: const TextStyle(
-                                          fontSize: 13,
-                                          fontWeight: FontWeight.w800,
-                                          color: AppColors.primary),
+                                      style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: AppColors.primary),
                                     ),
                                     const SizedBox(width: 6),
                                     Text(
                                       item['code'] as String,
-                                      style: const TextStyle(
-                                          fontSize: 10.5,
-                                          fontWeight: FontWeight.w700,
-                                          color: Color(0xFF0F3E38)),
+                                      style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.w700, color: Color(0xFF0F3E38)),
                                     ),
                                     const SizedBox(width: 6),
                                     Container(
-                                      padding: const EdgeInsets.symmetric(
-                                          horizontal: 6, vertical: 1.5),
+                                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
                                       decoration: BoxDecoration(
-                                        color: const Color(0xFFDCFCE7),
-                                        borderRadius:
-                                        BorderRadius.circular(4),
+                                        color: item['statusBg'] as Color,
+                                        borderRadius: BorderRadius.circular(4),
                                       ),
-                                      child: const Text('Active',
-                                          style: TextStyle(
-                                              fontSize: 8.5,
-                                              fontWeight: FontWeight.w700,
-                                              color: Color(0xFF16A36A))),
+                                      child: Text(
+                                        item['status'] as String,
+                                        style: TextStyle(fontSize: 8.5, fontWeight: FontWeight.w700, color: item['statusCol'] as Color),
+                                      ),
                                     ),
                                   ],
                                 ),
                                 const SizedBox(height: 2),
-                                Text('${item['phone']}  •  ${item['email']}',
-                                    style: const TextStyle(
-                                        fontSize: 10,
-                                        color: AppColors.textSecondary)),
+                                Text(
+                                  '${item['phone']} • ${item['email']}',
+                                  style: const TextStyle(fontSize: 10, color: AppColors.textSecondary),
+                                ),
                               ],
                             ),
                           ),
@@ -458,42 +538,28 @@ class _PayoutManagementScreenState extends State<PayoutManagementScreen> {
                     ),
                     const SizedBox(height: 14),
 
-                    // Payout Information Financial Breakdown[cite: 13]
                     const Text(
                       'Payout Information',
-                      style: TextStyle(
-                          fontSize: 12.5,
-                          fontWeight: FontWeight.w800,
-                          color: AppColors.primary),
+                      style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w800, color: AppColors.primary),
                     ),
                     const SizedBox(height: 8),
-                    _buildModalInfoRow('Payout ID', item['payoutId'] as String,
-                        'Payout Month', 'September 2024'),
+                    _buildModalInfoRow('Payout ID', item['payoutId'] as String, 'Payout Month', item['month'] as String),
                     const Divider(height: 12, color: AppColors.divider),
-                    _buildModalInfoRow('Commission Amount',
-                        item['commission'] as String, 'TDS (5%)', '- ${item['tds']}'),
+                    _buildModalInfoRow('Commission Amount', item['commission'] as String, 'TDS (5%)', '- ${item['tds']}'),
                     const Divider(height: 12, color: AppColors.divider),
-                    _buildModalInfoRow('Net Payout Amount',
-                        item['netAmount'] as String, 'Payment Method', item['method'] as String,
-                        isBoldFirst: true),
+                    _buildModalInfoRow('Net Payout Amount', item['netAmount'] as String, 'Payment Method', item['method'] as String, isBoldFirst: true),
                     const Divider(height: 12, color: AppColors.divider),
-                    _buildModalInfoRow('Bank Name', item['bank'] as String,
-                        'Account Number', item['accountNo'] as String),
+                    _buildModalInfoRow('Bank Name', item['bank'] as String, 'Account Number', item['accountNo'] as String),
                     const Divider(height: 12, color: AppColors.divider),
-                    _buildModalInfoRow('IFSC Code', item['ifsc'] as String,
-                        'Transaction ID', item['txnId'] as String),
+                    _buildModalInfoRow('IFSC Code', item['ifsc'] as String, 'Transaction ID', item['txnId'] as String),
                     const Divider(height: 12, color: AppColors.divider),
-                    _buildModalInfoRow('Request Date', item['requestDate'] as String,
-                        'Payment Date', item['paymentDate'] as String),
+                    _buildModalInfoRow('Request Date', item['requestDate'] as String, 'Payment Date', item['paymentDate'] as String),
                     const Divider(height: 12, color: AppColors.divider),
 
-                    // Internal Remarks / Notes[cite: 13]
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text('Notes',
-                            style: TextStyle(
-                                fontSize: 10, color: AppColors.textSecondary)),
+                        const Text('Notes', style: TextStyle(fontSize: 10, color: AppColors.textSecondary)),
                         const SizedBox(height: 3),
                         Container(
                           width: double.infinity,
@@ -505,10 +571,7 @@ class _PayoutManagementScreenState extends State<PayoutManagementScreen> {
                           ),
                           child: Text(
                             item['notes'] as String,
-                            style: const TextStyle(
-                                fontSize: 10.5,
-                                color: AppColors.textPrimary,
-                                height: 1.3),
+                            style: const TextStyle(fontSize: 10.5, color: AppColors.textPrimary, height: 1.3),
                           ),
                         ),
                       ],
@@ -518,57 +581,73 @@ class _PayoutManagementScreenState extends State<PayoutManagementScreen> {
               ),
             ),
             actions: [
-              // Bottom Actions: Download Invoice & Process New Payout[cite: 13]
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   OutlinedButton.icon(
                     onPressed: () {
                       ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                            content: Text(
-                                'Downloading Tax Invoice for ${item['payoutId']}...')),
+                        SnackBar(content: Text('Downloading Tax Invoice for ${item['payoutId']}...')),
                       );
                     },
-                    icon: const Icon(Icons.download_rounded,
-                        size: 15, color: Color(0xFF0F3E38)),
+                    icon: const Icon(Icons.download_rounded, size: 15, color: Color(0xFF0F3E38)),
                     label: const Text('Download Invoice',
-                        style: TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w700,
-                            color: Color(0xFF0F3E38))),
+                        style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Color(0xFF0F3E38))),
                     style: OutlinedButton.styleFrom(
                       side: const BorderSide(color: AppColors.border),
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 12, vertical: 8),
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8)),
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                     ),
                   ),
-                  ElevatedButton(
-                    onPressed: () {
-                      Navigator.pop(ctx);
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                            content: Text(
-                                'New Payout batch initialized successfully!'),
-                            backgroundColor: Color(0xFF0F3E38)),
-                      );
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF0F3E38),
-                      elevation: 0,
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 14, vertical: 8),
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8)),
+                  if (!isPaid)
+                    ElevatedButton(
+                      onPressed: isProcessing
+                          ? null
+                          : () async {
+                        setModalState(() => isProcessing = true);
+                        try {
+                          final token = await SharedPrefHelper.getToken();
+                          final pId = item['_id'];
+                          final url = Uri.parse(MFUrls.mfBaseUrl('api/v1/payouts/$pId'));
+
+                          final res = await http.put(
+                            url,
+                            headers: {
+                              'Content-Type': 'application/json',
+                              if (token != null) 'Authorization': 'Bearer $token',
+                            },
+                            body: jsonEncode({
+                              'status': 'Paid',
+                              'txnId': 'TXN${DateTime.now().millisecondsSinceEpoch.toString().substring(4)}',
+                            }),
+                          ).timeout(const Duration(seconds: 10));
+
+                          if (res.statusCode == 200) {
+                            if (ctx.mounted) Navigator.pop(ctx);
+                            _fetchPayouts();
+                            if (mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('Payout marked as Paid successfully!'),
+                                  backgroundColor: Color(0xFF16A36A),
+                                ),
+                              );
+                            }
+                          }
+                        } catch (_) {
+                          if (ctx.mounted) Navigator.pop(ctx);
+                        }
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF16A36A),
+                        elevation: 0,
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      ),
+                      child: isProcessing
+                          ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                          : const Text('Mark as Paid', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: Colors.white)),
                     ),
-                    child: const Text('Process New Payout',
-                        style: TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w800,
-                            color: Colors.white)),
-                  ),
                 ],
               ),
             ],
@@ -578,10 +657,7 @@ class _PayoutManagementScreenState extends State<PayoutManagementScreen> {
     );
   }
 
-  Widget _buildModalTab(
-      {required String title,
-        required bool isSelected,
-        required VoidCallback onTap}) {
+  Widget _buildModalTab({required String title, required bool isSelected, required VoidCallback onTap}) {
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(6),
@@ -603,8 +679,7 @@ class _PayoutManagementScreenState extends State<PayoutManagementScreen> {
     );
   }
 
-  Widget _buildModalInfoRow(String l1, String v1, String l2, String v2,
-      {bool isBoldFirst = false}) {
+  Widget _buildModalInfoRow(String l1, String v1, String l2, String v2, {bool isBoldFirst = false}) {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -612,18 +687,14 @@ class _PayoutManagementScreenState extends State<PayoutManagementScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(l1,
-                  style: const TextStyle(
-                      fontSize: 9.5, color: AppColors.textSecondary)),
+              Text(l1, style: const TextStyle(fontSize: 9.5, color: AppColors.textSecondary)),
               const SizedBox(height: 1),
               Text(
                 v1,
                 style: TextStyle(
                   fontSize: 11,
                   fontWeight: isBoldFirst ? FontWeight.w900 : FontWeight.w700,
-                  color: isBoldFirst
-                      ? const Color(0xFF0F3E38)
-                      : AppColors.primary,
+                  color: isBoldFirst ? const Color(0xFF0F3E38) : AppColors.primary,
                 ),
               ),
             ],
@@ -633,19 +704,29 @@ class _PayoutManagementScreenState extends State<PayoutManagementScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(l2,
-                  style: const TextStyle(
-                      fontSize: 9.5, color: AppColors.textSecondary)),
+              Text(l2, style: const TextStyle(fontSize: 9.5, color: AppColors.textSecondary)),
               const SizedBox(height: 1),
-              Text(v2,
-                  style: const TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.primary)),
+              Text(v2, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.primary)),
             ],
           ),
         ),
       ],
+    );
+  }
+
+  InputDecoration _inputDecoration(String label, String hint, {String? prefix}) {
+    return InputDecoration(
+      labelText: label,
+      labelStyle: const TextStyle(fontSize: 11.5, color: AppColors.textSecondary),
+      hintText: hint,
+      prefixText: prefix,
+      prefixStyle: const TextStyle(fontWeight: FontWeight.w700, color: AppColors.primary),
+      filled: true,
+      fillColor: const Color(0xFFF8FAFC),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: AppColors.border)),
+      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: AppColors.border)),
+      focusedBorder: const OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(8)), borderSide: BorderSide(color: Color(0xFF0F3E38), width: 1.4)),
     );
   }
 
@@ -660,23 +741,21 @@ class _PayoutManagementScreenState extends State<PayoutManagementScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Header title and Process Payout action[cite: 13]
               _buildHeaderSection(),
               const SizedBox(height: 16),
-
-              // 1. 4 Metric Cards (Total Commission, Pending, Paid, Failed)[cite: 13]
               _buildTopMetricsRow(),
               const SizedBox(height: 16),
-
-              // 2. Search & Filter Bar[cite: 13]
               _buildFilterToolbar(),
               const SizedBox(height: 16),
-
-              // 3. Partner Payouts Data Table[cite: 13]
-              _buildPayoutsDataTable(),
+              _isLoading
+                  ? const Center(
+                child: Padding(
+                  padding: EdgeInsets.all(32),
+                  child: CircularProgressIndicator(color: AppColors.secondary),
+                ),
+              )
+                  : _buildPayoutsDataTable(),
               const SizedBox(height: 14),
-
-              // 4. Pagination Footer[cite: 13]
               _buildPaginationFooter(),
               const SizedBox(height: 20),
             ],
@@ -686,14 +765,13 @@ class _PayoutManagementScreenState extends State<PayoutManagementScreen> {
     );
   }
 
-  // Header Title Row[cite: 13]
   Widget _buildHeaderSection() {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Column(
+        const Column(
           crossAxisAlignment: CrossAxisAlignment.start,
-          children: const [
+          children: [
             Text(
               'Payout Management',
               style: TextStyle(
@@ -710,43 +788,31 @@ class _PayoutManagementScreenState extends State<PayoutManagementScreen> {
           ],
         ),
         ElevatedButton.icon(
-          onPressed: () {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('Processing next batch of partner payouts...'),
-                backgroundColor: Color(0xFF0F3E38),
-              ),
-            );
-          },
+          onPressed: _openProcessPayoutModal,
           icon: const Icon(Icons.send_rounded, size: 16, color: Colors.white),
           label: const Text(
             '+ Process Payout',
-            style: TextStyle(
-                fontSize: 12.5,
-                fontWeight: FontWeight.w700,
-                color: Colors.white),
+            style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: Colors.white),
           ),
           style: ElevatedButton.styleFrom(
             backgroundColor: const Color(0xFF0F3E38),
             elevation: 0,
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            shape:
-            RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
           ),
         ),
       ],
     );
   }
 
-  // 1. 4 Metric Cards[cite: 13]
   Widget _buildTopMetricsRow() {
     return Row(
       children: [
         Expanded(
           child: _buildMetricCard(
             title: 'Total Commission',
-            value: '₹ 12,48,500',
-            badgeText: '↑ 12%',
+            value: _totalCommission,
+            badgeText: 'Live',
             badgeBg: const Color(0xFFDCFCE7),
             badgeColor: const Color(0xFF16A36A),
             subtitle: 'This month',
@@ -759,11 +825,11 @@ class _PayoutManagementScreenState extends State<PayoutManagementScreen> {
         Expanded(
           child: _buildMetricCard(
             title: 'Pending Payouts',
-            value: '₹ 3,20,000',
-            badgeText: '↓ 8%',
+            value: _pendingPayouts,
+            badgeText: 'Pipeline',
             badgeBg: const Color(0xFFFEF3C7),
             badgeColor: const Color(0xFFD97706),
-            subtitle: '24 partners',
+            subtitle: 'Processing clearing',
             icon: Icons.hourglass_top_rounded,
             iconBg: const Color(0xFFFEF3C7),
             iconColor: const Color(0xFFD97706),
@@ -773,11 +839,11 @@ class _PayoutManagementScreenState extends State<PayoutManagementScreen> {
         Expanded(
           child: _buildMetricCard(
             title: 'Paid Payouts',
-            value: '₹ 8,70,500',
-            badgeText: '↑ 20%',
+            value: _paidPayouts,
+            badgeText: 'Completed',
             badgeBg: const Color(0xFFDCFCE7),
             badgeColor: const Color(0xFF16A36A),
-            subtitle: '32 partners',
+            subtitle: 'Credited to bank',
             icon: Icons.check_circle_outline_rounded,
             iconBg: const Color(0xFFDCFCE7),
             iconColor: const Color(0xFF16A36A),
@@ -787,11 +853,11 @@ class _PayoutManagementScreenState extends State<PayoutManagementScreen> {
         Expanded(
           child: _buildMetricCard(
             title: 'Failed Payouts',
-            value: '₹ 45,000',
-            badgeText: '↑ 15%',
+            value: _failedPayouts,
+            badgeText: 'Review',
             badgeBg: const Color(0xFFFEE2E2),
             badgeColor: const Color(0xFFDC2626),
-            subtitle: '3 partners',
+            subtitle: 'Bank mismatch',
             icon: Icons.cancel_outlined,
             iconBg: const Color(0xFFFEE2E2),
             iconColor: const Color(0xFFDC2626),
@@ -825,51 +891,36 @@ class _PayoutManagementScreenState extends State<PayoutManagementScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(title,
-                  style: const TextStyle(
-                      fontSize: 11.5,
-                      color: AppColors.textSecondary,
-                      fontWeight: FontWeight.w600)),
+              Text(title, style: const TextStyle(fontSize: 11.5, color: AppColors.textSecondary, fontWeight: FontWeight.w600)),
               Container(
-                padding:
-                const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                decoration: BoxDecoration(
-                    color: badgeBg, borderRadius: BorderRadius.circular(4)),
-                child: Text(badgeText,
-                    style: TextStyle(
-                        fontSize: 9.5,
-                        fontWeight: FontWeight.w800,
-                        color: badgeColor)),
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(color: badgeBg, borderRadius: BorderRadius.circular(4)),
+                child: Text(badgeText, style: TextStyle(fontSize: 9.5, fontWeight: FontWeight.w800, color: badgeColor)),
               ),
             ],
           ),
           const SizedBox(height: 8),
           Row(
             children: [
-              CircleAvatar(
-                  radius: 14,
-                  backgroundColor: iconBg,
-                  child: Icon(icon, size: 16, color: iconColor)),
+              CircleAvatar(radius: 14, backgroundColor: iconBg, child: Icon(icon, size: 16, color: iconColor)),
               const SizedBox(width: 10),
-              Text(
-                value,
-                style: const TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w900,
-                    color: AppColors.primary),
+              Flexible(
+                child: Text(
+                  value,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: AppColors.primary),
+                ),
               ),
             ],
           ),
           const SizedBox(height: 4),
-          Text(subtitle,
-              style:
-              const TextStyle(fontSize: 10, color: AppColors.textHint)),
+          Text(subtitle, style: const TextStyle(fontSize: 10, color: AppColors.textHint)),
         ],
       ),
     );
   }
 
-  // 2. Search & Filter Bar[cite: 13]
   Widget _buildFilterToolbar() {
     return Container(
       padding: const EdgeInsets.all(12),
@@ -891,13 +942,12 @@ class _PayoutManagementScreenState extends State<PayoutManagementScreen> {
               ),
               child: TextField(
                 controller: _searchController,
+                onChanged: (_) => setState(() {}),
                 style: const TextStyle(fontSize: 12),
                 decoration: const InputDecoration(
                   hintText: 'Search by partner name, mobile, payout ID...',
-                  hintStyle:
-                  TextStyle(fontSize: 11, color: AppColors.textHint),
-                  prefixIcon: Icon(Icons.search_rounded,
-                      size: 17, color: AppColors.iconSecondary),
+                  hintStyle: TextStyle(fontSize: 11, color: AppColors.textHint),
+                  prefixIcon: Icon(Icons.search_rounded, size: 17, color: AppColors.iconSecondary),
                   border: InputBorder.none,
                   contentPadding: EdgeInsets.symmetric(vertical: 10),
                 ),
@@ -933,36 +983,14 @@ class _PayoutManagementScreenState extends State<PayoutManagementScreen> {
             ),
           ),
           const SizedBox(width: 10),
-          OutlinedButton.icon(
-            onPressed: () {},
-            icon: const Icon(Icons.filter_list_rounded,
-                size: 15, color: AppColors.primary),
-            label: const Text('Filters',
-                style: TextStyle(
-                    fontSize: 11.5,
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.primary)),
-            style: OutlinedButton.styleFrom(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-              side: const BorderSide(color: AppColors.border),
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8)),
-            ),
-          ),
-          const SizedBox(width: 8),
           OutlinedButton(
             onPressed: _resetFilters,
             style: OutlinedButton.styleFrom(
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
               side: const BorderSide(color: AppColors.border),
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8)),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
             ),
-            child: const Text('Reset',
-                style: TextStyle(
-                    fontSize: 11.5,
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.primary)),
+            child: const Text('Reset', style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: AppColors.primary)),
           ),
         ],
       ),
@@ -986,26 +1014,41 @@ class _PayoutManagementScreenState extends State<PayoutManagementScreen> {
       child: DropdownButtonHideUnderline(
         child: DropdownButton<String>(
           value: value,
-          icon: Icon(icon ?? Icons.keyboard_arrow_down_rounded,
-              size: 16, color: AppColors.iconSecondary),
+          icon: Icon(icon ?? Icons.keyboard_arrow_down_rounded, size: 16, color: AppColors.iconSecondary),
           isExpanded: true,
-          style: const TextStyle(
-              fontSize: 11.5,
-              fontWeight: FontWeight.w600,
-              color: AppColors.primary),
-          items: items
-              .map((i) => DropdownMenuItem(
-              value: i,
-              child: Text(i, overflow: TextOverflow.ellipsis)))
-              .toList(),
+          style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, color: AppColors.primary),
+          items: items.map((i) => DropdownMenuItem(value: i, child: Text(i, overflow: TextOverflow.ellipsis))).toList(),
           onChanged: onChanged,
         ),
       ),
     );
   }
 
-  // 3. Partner Payouts Data Table[cite: 13]
   Widget _buildPayoutsDataTable() {
+    final payouts = _filteredPayouts;
+
+    if (payouts.isEmpty) {
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(32),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: AppColors.border),
+        ),
+        child: const Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.payments_outlined, size: 40, color: AppColors.textHint),
+              SizedBox(height: 8),
+              Text('No matching payout records found', style: TextStyle(color: AppColors.textSecondary, fontSize: 13)),
+            ],
+          ),
+        ),
+      );
+    }
+
     return Container(
       width: double.infinity,
       decoration: BoxDecoration(
@@ -1021,35 +1064,14 @@ class _PayoutManagementScreenState extends State<PayoutManagementScreen> {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Text(
-                  'Partner Payouts (48)',
-                  style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w800,
-                      color: AppColors.primary),
+                Text(
+                  'Partner Payouts (${payouts.length})',
+                  style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: AppColors.primary),
                 ),
-                OutlinedButton.icon(
-                  onPressed: () {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                          content: Text('Exporting partner payouts to Excel...')),
-                    );
-                  },
-                  icon: const Icon(Icons.download_rounded,
-                      size: 14, color: AppColors.primary),
-                  label: const Text('Export',
-                      style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w700,
-                          color: AppColors.primary)),
-                  style: OutlinedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 10, vertical: 6),
-                    minimumSize: Size.zero,
-                    side: const BorderSide(color: AppColors.border),
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(6)),
-                  ),
+                IconButton(
+                  icon: const Icon(Icons.refresh_rounded, size: 20, color: Color(0xFF0F3E38)),
+                  tooltip: 'Refresh Payouts',
+                  onPressed: _fetchPayouts,
                 ),
               ],
             ),
@@ -1061,8 +1083,8 @@ class _PayoutManagementScreenState extends State<PayoutManagementScreen> {
               scrollDirection: Axis.horizontal,
               physics: const BouncingScrollPhysics(),
               child: DataTable(
-                headingRowColor:
-                WidgetStateProperty.all(const Color(0xFFF8FAFC)),
+                showCheckboxColumn: false, // 👈 Fixes duplicate checkbox
+                headingRowColor: WidgetStateProperty.all(const Color(0xFFF8FAFC)),
                 headingRowHeight: 44,
                 dataRowMinHeight: 52,
                 dataRowMaxHeight: 56,
@@ -1077,8 +1099,7 @@ class _PayoutManagementScreenState extends State<PayoutManagementScreen> {
                         setState(() {
                           _selectAll = val ?? false;
                           if (_selectAll) {
-                            _selectedRows.addAll(
-                                List.generate(_payouts.length, (i) => i));
+                            _selectedRows.addAll(List.generate(payouts.length, (i) => i));
                           } else {
                             _selectedRows.clear();
                           }
@@ -1087,24 +1108,18 @@ class _PayoutManagementScreenState extends State<PayoutManagementScreen> {
                     ),
                   ),
                   const DataColumn(label: Text('#', style: _headerStyle)),
-                  const DataColumn(
-                      label: Text('Partner Details', style: _headerStyle)),
-                  const DataColumn(
-                      label: Text('Total Leads', style: _headerStyle)),
-                  const DataColumn(
-                      label: Text('Approved Leads', style: _headerStyle)),
-                  const DataColumn(
-                      label: Text('Commission', style: _headerStyle)),
-                  const DataColumn(
-                      label: Text('Payout Amount', style: _headerStyle)),
+                  const DataColumn(label: Text('Partner Details', style: _headerStyle)),
+                  const DataColumn(label: Text('Total Leads', style: _headerStyle)),
+                  const DataColumn(label: Text('Approved Leads', style: _headerStyle)),
+                  const DataColumn(label: Text('Commission', style: _headerStyle)),
+                  const DataColumn(label: Text('Payout Amount', style: _headerStyle)),
                   const DataColumn(label: Text('Month', style: _headerStyle)),
                   const DataColumn(label: Text('Status', style: _headerStyle)),
-                  const DataColumn(
-                      label: Text('Payment Date', style: _headerStyle)),
+                  const DataColumn(label: Text('Payment Date', style: _headerStyle)),
                   const DataColumn(label: Text('Actions', style: _headerStyle)),
                 ],
-                rows: List.generate(_payouts.length, (index) {
-                  final item = _payouts[index];
+                rows: List.generate(payouts.length, (index) {
+                  final item = payouts[index];
                   final isSelected = _selectedRows.contains(index);
 
                   return DataRow(
@@ -1121,28 +1136,21 @@ class _PayoutManagementScreenState extends State<PayoutManagementScreen> {
                               } else {
                                 _selectedRows.remove(index);
                               }
-                              _selectAll =
-                                  _selectedRows.length == _payouts.length;
+                              _selectAll = _selectedRows.length == payouts.length;
                             });
                           },
                         ),
                       ),
-                      DataCell(Text('${item['id']}',
-                          style: const TextStyle(
-                              fontSize: 11.5, color: AppColors.textSecondary))),
+                      DataCell(Text('${item['id']}', style: const TextStyle(fontSize: 11.5, color: AppColors.textSecondary))),
                       DataCell(
                         Row(
                           children: [
                             CircleAvatar(
                               radius: 13,
-                              backgroundColor: const Color(0xFF0F3E38)
-                                  .withValues(alpha: 0.1),
+                              backgroundColor: const Color(0xFF0F3E38).withValues(alpha: 0.1),
                               child: Text(
-                                (item['name'] as String)[0],
-                                style: const TextStyle(
-                                    fontSize: 10.5,
-                                    fontWeight: FontWeight.w800,
-                                    color: Color(0xFF0F3E38)),
+                                (item['name'] as String).isNotEmpty ? (item['name'] as String)[0].toUpperCase() : 'P',
+                                style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.w800, color: Color(0xFF0F3E38)),
                               ),
                             ),
                             const SizedBox(width: 8),
@@ -1151,83 +1159,54 @@ class _PayoutManagementScreenState extends State<PayoutManagementScreen> {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(item['name'] as String,
-                                    style: const TextStyle(
-                                        fontSize: 12,
-                                        fontWeight: FontWeight.w800,
-                                        color: AppColors.primary)),
+                                    style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: AppColors.primary)),
                                 Text(
-                                    '${item['code']} • ${item['phone']}',
-                                    style: const TextStyle(
-                                        fontSize: 9.5,
-                                        color: AppColors.textSecondary)),
+                                  '${item['code']} • ${item['phone']}',
+                                  style: const TextStyle(fontSize: 9.5, color: AppColors.textSecondary),
+                                ),
                               ],
                             ),
                           ],
                         ),
                       ),
                       DataCell(Text('${item['totalLeads']}',
-                          style: const TextStyle(
-                              fontSize: 11.5,
-                              fontWeight: FontWeight.w600,
-                              color: AppColors.primary))),
+                          style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, color: AppColors.primary))),
                       DataCell(Text('${item['approvedLeads']}',
-                          style: const TextStyle(
-                              fontSize: 11.5,
-                              fontWeight: FontWeight.w700,
-                              color: Color(0xFF16A36A)))),
+                          style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: Color(0xFF16A36A)))),
                       DataCell(Text(item['commission'] as String,
-                          style: const TextStyle(
-                              fontSize: 11.5,
-                              fontWeight: FontWeight.w700,
-                              color: AppColors.primary))),
+                          style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: AppColors.primary))),
                       DataCell(Text(item['payoutAmount'] as String,
-                          style: const TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w900,
-                              color: Color(0xFF0F3E38)))),
-                      DataCell(Text(item['month'] as String,
-                          style: const TextStyle(
-                              fontSize: 11, color: AppColors.textSecondary))),
+                          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w900, color: Color(0xFF0F3E38)))),
+                      DataCell(Text(item['month'] as String, style: const TextStyle(fontSize: 11, color: AppColors.textSecondary))),
                       DataCell(
                         Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 7, vertical: 2.5),
+                          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2.5),
                           decoration: BoxDecoration(
                             color: item['statusBg'] as Color,
                             borderRadius: BorderRadius.circular(4),
                           ),
                           child: Text(
                             item['status'] as String,
-                            style: TextStyle(
-                              fontSize: 9,
-                              fontWeight: FontWeight.w700,
-                              color: item['statusCol'] as Color,
-                            ),
+                            style: TextStyle(fontSize: 9, fontWeight: FontWeight.w700, color: item['statusCol'] as Color),
                           ),
                         ),
                       ),
-                      DataCell(Text(item['paymentDate'] as String,
-                          style: const TextStyle(
-                              fontSize: 10.5, color: AppColors.textSecondary))),
+                      DataCell(Text(item['paymentDate'] as String, style: const TextStyle(fontSize: 10.5, color: AppColors.textSecondary))),
                       DataCell(
                         Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             IconButton(
-                              icon: const Icon(Icons.visibility_outlined,
-                                  size: 16, color: Color(0xFF0284C7)),
+                              icon: const Icon(Icons.visibility_outlined, size: 16, color: Color(0xFF0284C7)),
                               tooltip: 'View Payout Details',
                               onPressed: () => _openPayoutDetailsModal(item),
                             ),
                             IconButton(
-                              icon: const Icon(Icons.receipt_long_rounded,
-                                  size: 16, color: Color(0xFF0F3E38)),
+                              icon: const Icon(Icons.receipt_long_rounded, size: 16, color: Color(0xFF0F3E38)),
                               tooltip: 'Download Invoice',
                               onPressed: () {
                                 ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(
-                                      content: Text(
-                                          'Invoice for ${item['payoutId']} downloaded.')),
+                                  SnackBar(content: Text('Tax Invoice for ${item['payoutId']} downloaded.')),
                                 );
                               },
                             ),
@@ -1251,14 +1230,13 @@ class _PayoutManagementScreenState extends State<PayoutManagementScreen> {
     color: AppColors.primary,
   );
 
-  // 4. Pagination Footer[cite: 13]
   Widget _buildPaginationFooter() {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        const Text(
-          'Showing 1 to 10 of 48 partners',
-          style: TextStyle(fontSize: 11.5, color: AppColors.textSecondary),
+        Text(
+          'Showing 1 to ${_filteredPayouts.length} of ${_payouts.length} payouts',
+          style: const TextStyle(fontSize: 11.5, color: AppColors.textSecondary),
         ),
         Row(
           children: [
@@ -1273,66 +1251,17 @@ class _PayoutManagementScreenState extends State<PayoutManagementScreen> {
               child: DropdownButtonHideUnderline(
                 child: DropdownButton<int>(
                   value: _rowsPerPage,
-                  style: const TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w600,
-                      color: AppColors.primary),
-                  items: [10, 25, 50]
-                      .map((n) =>
-                      DropdownMenuItem(value: n, child: Text('$n per page')))
-                      .toList(),
-                  onChanged: (val) => setState(() => _rowsPerPage = val!),
+                  style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.primary),
+                  items: [10, 25, 50].map((n) => DropdownMenuItem(value: n, child: Text('$n per page'))).toList(),
+                  onChanged: (val) {
+                    if (val != null) setState(() => _rowsPerPage = val);
+                  },
                 ),
               ),
             ),
-            const SizedBox(width: 10),
-            _buildPageButton('<', isEnabled: false),
-            const SizedBox(width: 4),
-            _buildPageButton('1', isSelected: true),
-            const SizedBox(width: 4),
-            _buildPageButton('2'),
-            const SizedBox(width: 4),
-            _buildPageButton('3'),
-            const SizedBox(width: 4),
-            _buildPageButton('4'),
-            const SizedBox(width: 4),
-            _buildPageButton('5'),
-            const SizedBox(width: 4),
-            _buildPageButton('>'),
           ],
         ),
       ],
-    );
-  }
-
-  Widget _buildPageButton(String text,
-      {bool isSelected = false, bool isEnabled = true}) {
-    return InkWell(
-      onTap: isEnabled ? () {} : null,
-      borderRadius: BorderRadius.circular(6),
-      child: Container(
-        width: 28,
-        height: 28,
-        alignment: Alignment.center,
-        decoration: BoxDecoration(
-          color: isSelected ? const Color(0xFF0F3E38) : Colors.white,
-          borderRadius: BorderRadius.circular(6),
-          border: Border.all(
-              color: isSelected ? const Color(0xFF0F3E38) : AppColors.border),
-        ),
-        child: Text(
-          text,
-          style: TextStyle(
-            fontSize: 11,
-            fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
-            color: isSelected
-                ? Colors.white
-                : isEnabled
-                ? AppColors.primary
-                : AppColors.textHint,
-          ),
-        ),
-      ),
     );
   }
 }

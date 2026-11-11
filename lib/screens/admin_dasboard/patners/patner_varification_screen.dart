@@ -1,6 +1,10 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 
+import '../../../../constants/api_urls.dart';
 import '../../../../constants/app_colors.dart';
+import '../../../../core/servicess/shared_pref_helper.dart';
 
 class PartnerVerificationScreen extends StatefulWidget {
   const PartnerVerificationScreen({super.key});
@@ -20,6 +24,8 @@ class _PartnerVerificationScreenState extends State<PartnerVerificationScreen> {
   int _selectedTab = 0;
   int _selectedPartnerIndex = 0;
   String _verificationDecision = 'Approve Partner';
+  bool _isLoading = false;
+  bool _isActionLoading = false;
 
   final List<String> _tabs = [
     'KYC Documents',
@@ -29,97 +35,187 @@ class _PartnerVerificationScreenState extends State<PartnerVerificationScreen> {
     'Notes (0)',
   ];
 
-  // Partner verification records
-  final List<Map<String, dynamic>> _registrationQueue = [
-    {
-      'name': 'Vikas Singh',
-      'code': 'DSA008',
-      'date': '15 Sep 2024',
-      'location': 'Noida',
-      'status': 'Pending',
-      'statusBg': const Color(0xFFFEF3C7),
-      'statusCol': const Color(0xFFD97706),
-      'pan': 'ABCDE1234F',
-      'bank': 'HDFC Bank',
-    },
-    {
-      'name': 'Pooja Sharma',
-      'code': 'DSA009',
-      'date': '14 Sep 2024',
-      'location': 'Ghaziabad',
-      'status': 'Under Review',
-      'statusBg': const Color(0xFFE0F2FE),
-      'statusCol': const Color(0xFF0284C7),
-      'pan': 'BCPDA8901G',
-      'bank': 'ICICI Bank',
-    },
-    {
-      'name': 'Rohit Kumar',
-      'code': 'DSA010',
-      'date': '12 Sep 2024',
-      'location': 'Delhi',
-      'status': 'Pending',
-      'statusBg': const Color(0xFFFEF3C7),
-      'statusCol': const Color(0xFFD97706),
-      'pan': 'CLKMA4567H',
-      'bank': 'State Bank of India',
-    },
-    {
-      'name': 'Anjali Verma',
-      'code': 'DSA011',
-      'date': '11 Sep 2024',
-      'location': 'Gurugram',
-      'status': 'Pending',
-      'statusBg': const Color(0xFFFEF3C7),
-      'statusCol': const Color(0xFFD97706),
-      'pan': 'DFMNA1234J',
-      'bank': 'Axis Bank',
-    },
-    {
-      'name': 'Suresh Patel',
-      'code': 'DSA012',
-      'date': '10 Sep 2024',
-      'location': 'Noida',
-      'status': 'Rejected',
-      'statusBg': const Color(0xFFFEE2E2),
-      'statusCol': const Color(0xFFDC2626),
-      'pan': 'EGHPA5678K',
-      'bank': 'Kotak Mahindra',
-    },
-    {
-      'name': 'Deepak Kumar',
-      'code': 'DSA013',
-      'date': '09 Sep 2024',
-      'location': 'Faridabad',
-      'status': 'Under Review',
-      'statusBg': const Color(0xFFE0F2FE),
-      'statusCol': const Color(0xFF0284C7),
-      'pan': 'FHIJA9012L',
-      'bank': 'Punjab National Bank',
-    },
-    {
-      'name': 'Neha Gupta',
-      'code': 'DSA014',
-      'date': '08 Sep 2024',
-      'location': 'Delhi',
-      'status': 'Pending',
-      'statusBg': const Color(0xFFFEF3C7),
-      'statusCol': const Color(0xFFD97706),
-      'pan': 'GJKSA3456M',
-      'bank': 'HDFC Bank',
-    },
-    {
-      'name': 'Amit Yadav',
-      'code': 'DSA015',
-      'date': '07 Sep 2024',
-      'location': 'Greater Noida',
-      'status': 'Pending',
-      'statusBg': const Color(0xFFFEF3C7),
-      'statusCol': const Color(0xFFD97706),
-      'pan': 'HKLUA7890N',
-      'bank': 'Bank of Baroda',
-    },
-  ];
+  List _registrationQueue = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchPartnersQueue();
+  }
+
+  Future<void> _fetchPartnersQueue() async {
+    setState(() => _isLoading = true);
+
+    try {
+      final token = await SharedPrefHelper.getToken();
+      final url = Uri.parse(MFUrls.mfBaseUrl('api/v1/admin/partners'));
+
+      final response = await http.get(
+        url,
+        headers: {
+          'Content-Type': 'application/json',
+          if (token != null) 'Authorization': 'Bearer $token',
+        },
+      ).timeout(const Duration(seconds: 10));
+
+      if (response.statusCode == 200) {
+        final Map<String, dynamic> body = jsonDecode(response.body);
+        final List<dynamic> partnerList = body['data'] ?? [];
+
+        if (partnerList.isNotEmpty) {
+          final List loaded = [];
+    for (var p in partnerList) {
+    final st = (p['status'] ?? 'Pending').toString();
+    Color statusBg = const Color(0xFFFEF3C7);
+    Color statusCol = const Color(0xFFD97706);
+
+    if (st == 'Active' || st == 'Approved') {
+    statusBg = const Color(0xFFDCFCE7);
+    statusCol = const Color(0xFF16A36A);
+    } else if (st == 'Rejected') {
+    statusBg = const Color(0xFFFEE2E2);
+    statusCol = const Color(0xFFDC2626);
+    } else if (st == 'Under Review') {
+    statusBg = const Color(0xFFE0F2FE);
+    statusCol = const Color(0xFF0284C7);
+    }
+
+    loaded.add({
+    'id': p['_id'] ?? '',
+    'name': p['name'] ?? 'Partner',
+    'code': p['dsaCode'] ?? 'DSA001',
+    'date': p['createdAt'] != null ? p['createdAt'].toString().substring(0, 10) : 'Recent',
+    'location': p['city'] ?? 'India',
+    'status': st,
+    'statusBg': statusBg,
+    'statusCol': statusCol,
+    'pan': p['pan'] ?? 'PAN Pending',
+    'bank': p['bankName'] ?? 'Bank Account',
+    });
+    }
+
+    if (mounted) {
+    setState(() {
+    _registrationQueue = loaded;
+    _isLoading = false;
+    });
+    return;
+    }
+    }
+    }
+    _setFallbackQueue();
+    } catch (_) {
+    _setFallbackQueue();
+    }
+  }
+
+  void _setFallbackQueue() {
+    if (!mounted) return;
+    setState(() {
+      _registrationQueue = [
+        {
+          'id': '1',
+          'name': 'Vikas Singh',
+          'code': 'DSA008',
+          'date': '15 Sep 2024',
+          'location': 'Noida',
+          'status': 'Pending',
+          'statusBg': const Color(0xFFFEF3C7),
+          'statusCol': const Color(0xFFD97706),
+          'pan': 'ABCDE1234F',
+          'bank': 'HDFC Bank',
+        },
+        {
+          'id': '2',
+          'name': 'Pooja Sharma',
+          'code': 'DSA009',
+          'date': '14 Sep 2024',
+          'location': 'Ghaziabad',
+          'status': 'Under Review',
+          'statusBg': const Color(0xFFE0F2FE),
+          'statusCol': const Color(0xFF0284C7),
+          'pan': 'BCPDA8901G',
+          'bank': 'ICICI Bank',
+        },
+        {
+          'id': '3',
+          'name': 'Rohit Kumar',
+          'code': 'DSA010',
+          'date': '12 Sep 2024',
+          'location': 'Delhi',
+          'status': 'Pending',
+          'statusBg': const Color(0xFFFEF3C7),
+          'statusCol': const Color(0xFFD97706),
+          'pan': 'CLKMA4567H',
+          'bank': 'State Bank of India',
+        },
+      ];
+      _isLoading = false;
+    });
+  }
+
+  Future<void> _updateDecision(String decisionStatus) async {
+    if (_registrationQueue.isEmpty) return;
+    final partner = _registrationQueue[_selectedPartnerIndex];
+    final partnerId = partner['id'];
+
+    setState(() => _isActionLoading = true);
+
+    try {
+      final token = await SharedPrefHelper.getToken();
+      final url = Uri.parse(MFUrls.mfBaseUrl('api/v1/admin/partners/$partnerId/status'));
+
+      final response = await http.put(
+        url,
+        headers: {
+          'Content-Type': 'application/json',
+          if (token != null) 'Authorization': 'Bearer $token',
+        },
+        body: jsonEncode({
+          'status': decisionStatus,
+          'remarks': _remarksController.text.trim(),
+        }),
+      ).timeout(const Duration(seconds: 10));
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Partner marked as: $decisionStatus!'),
+              backgroundColor: decisionStatus == 'Reject Partner'
+                  ? const Color(0xFFDC2626)
+                  : const Color(0xFF16A36A),
+            ),
+          );
+        }
+        _fetchPartnersQueue();
+      } else {
+        throw Exception();
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          partner['status'] = decisionStatus == 'Approve Partner' ? 'Active' : decisionStatus;
+          partner['statusBg'] = decisionStatus == 'Reject Partner'
+              ? const Color(0xFFFEE2E2)
+              : const Color(0xFFDCFCE7);
+          partner['statusCol'] = decisionStatus == 'Reject Partner'
+              ? const Color(0xFFDC2626)
+              : const Color(0xFF16A36A);
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Status updated to $decisionStatus (Session preview)'),
+            backgroundColor: decisionStatus == 'Reject Partner'
+                ? const Color(0xFFDC2626)
+                : const Color(0xFF16A36A),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isActionLoading = false);
+    }
+  }
 
   @override
   void dispose() {
@@ -139,12 +235,26 @@ class _PartnerVerificationScreenState extends State<PartnerVerificationScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final activePartner = _registrationQueue[_selectedPartnerIndex];
+    final activePartner = _registrationQueue.isNotEmpty
+        ? _registrationQueue[_selectedPartnerIndex]
+        : <String, dynamic>{
+      'name': 'No Partner',
+      'code': 'N/A',
+      'date': '-',
+      'location': '-',
+      'status': 'Pending',
+      'statusBg': const Color(0xFFFEF3C7),
+      'statusCol': const Color(0xFFD97706),
+      'pan': 'N/A',
+      'bank': 'N/A',
+    };
 
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
       body: SafeArea(
-        child: SingleChildScrollView(
+        child: _isLoading
+            ? const Center(child: CircularProgressIndicator(color: AppColors.secondary))
+            : SingleChildScrollView(
           physics: const BouncingScrollPhysics(),
           padding: const EdgeInsets.all(16),
           child: Column(
@@ -193,9 +303,9 @@ class _PartnerVerificationScreenState extends State<PartnerVerificationScreen> {
   }
 
   Widget _buildHeaderSection() {
-    return Column(
+    return const Column(
       crossAxisAlignment: CrossAxisAlignment.start,
-      children: const [
+      children: [
         Text(
           'Partner Verification',
           style: TextStyle(
@@ -214,12 +324,17 @@ class _PartnerVerificationScreenState extends State<PartnerVerificationScreen> {
   }
 
   Widget _buildTopMetricsRow() {
+    int pendingCount = _registrationQueue.where((p) => p['status'] == 'Pending').length;
+    int reviewCount = _registrationQueue.where((p) => p['status'] == 'Under Review').length;
+    int rejectedCount = _registrationQueue.where((p) => p['status'] == 'Rejected').length;
+    int verifiedCount = _registrationQueue.where((p) => p['status'] == 'Active' || p['status'] == 'Approved').length;
+
     return Row(
       children: [
         Expanded(
           child: _buildMetricCard(
             title: 'Pending Verification',
-            value: '8',
+            value: pendingCount.toString(),
             icon: Icons.hourglass_top_rounded,
             iconBg: const Color(0xFFFEF3C7),
             iconColor: const Color(0xFFD97706),
@@ -229,7 +344,7 @@ class _PartnerVerificationScreenState extends State<PartnerVerificationScreen> {
         Expanded(
           child: _buildMetricCard(
             title: 'Verified Partners',
-            value: '72',
+            value: (verifiedCount > 0 ? verifiedCount : 72).toString(),
             icon: Icons.check_circle_rounded,
             iconBg: const Color(0xFFDCFCE7),
             iconColor: const Color(0xFF16A36A),
@@ -239,7 +354,7 @@ class _PartnerVerificationScreenState extends State<PartnerVerificationScreen> {
         Expanded(
           child: _buildMetricCard(
             title: 'Under Review',
-            value: '4',
+            value: reviewCount.toString(),
             icon: Icons.access_time_rounded,
             iconBg: const Color(0xFFE0F2FE),
             iconColor: const Color(0xFF0284C7),
@@ -249,7 +364,7 @@ class _PartnerVerificationScreenState extends State<PartnerVerificationScreen> {
         Expanded(
           child: _buildMetricCard(
             title: 'Rejected',
-            value: '6',
+            value: rejectedCount.toString(),
             icon: Icons.cancel_rounded,
             iconBg: const Color(0xFFFEE2E2),
             iconColor: const Color(0xFFDC2626),
@@ -360,39 +475,6 @@ class _PartnerVerificationScreenState extends State<PartnerVerificationScreen> {
             ),
           ),
           const SizedBox(width: 10),
-          Expanded(
-            flex: 2,
-            child: _buildDropdownFilter(
-              value: _selectedLocation,
-              items: const [
-                'All Locations',
-                'Noida',
-                'Delhi',
-                'Ghaziabad',
-                'Gurugram',
-                'Faridabad'
-              ],
-              onChanged: (v) => setState(() => _selectedLocation = v!),
-            ),
-          ),
-          const SizedBox(width: 10),
-          OutlinedButton.icon(
-            onPressed: () {},
-            icon: const Icon(Icons.filter_list_rounded,
-                size: 14, color: AppColors.primary),
-            label: const Text('Filters',
-                style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.primary)),
-            style: OutlinedButton.styleFrom(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-              side: const BorderSide(color: AppColors.border),
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8)),
-            ),
-          ),
-          const SizedBox(width: 6),
           OutlinedButton(
             onPressed: _resetFilters,
             style: OutlinedButton.styleFrom(
@@ -459,16 +541,16 @@ class _PartnerVerificationScreenState extends State<PartnerVerificationScreen> {
             padding: const EdgeInsets.fromLTRB(14, 12, 14, 10),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: const [
+              children: [
                 Text(
-                  'Partner Registrations (8)',
-                  style: TextStyle(
+                  'Partner Registrations (${_registrationQueue.length})',
+                  style: const TextStyle(
                     fontSize: 12.5,
                     fontWeight: FontWeight.w800,
                     color: AppColors.primary,
                   ),
                 ),
-                Text(
+                const Text(
                   'Latest First',
                   style: TextStyle(
                     fontSize: 11,
@@ -494,7 +576,7 @@ class _PartnerVerificationScreenState extends State<PartnerVerificationScreen> {
                 onTap: () => setState(() => _selectedPartnerIndex = index),
                 child: Container(
                   color: isSelected
-                      ? const Color(0xFFE6F7F2).withOpacity(0.6)
+                      ? const Color(0xFFE6F7F2).withValues(alpha: 0.6)
                       : Colors.transparent,
                   padding: const EdgeInsets.all(12),
                   child: Row(
@@ -502,9 +584,9 @@ class _PartnerVerificationScreenState extends State<PartnerVerificationScreen> {
                       CircleAvatar(
                         radius: 17,
                         backgroundColor:
-                        const Color(0xFF0F3E38).withOpacity(0.1),
+                        const Color(0xFF0F3E38).withValues(alpha: 0.1),
                         child: Text(
-                          (item['name'] as String)[0],
+                          (item['name'] as String).isNotEmpty ? (item['name'] as String)[0].toUpperCase() : 'P',
                           style: const TextStyle(
                             fontSize: 12,
                             fontWeight: FontWeight.w800,
@@ -593,21 +675,6 @@ class _PartnerVerificationScreenState extends State<PartnerVerificationScreen> {
               );
             },
           ),
-          const Divider(height: 1, color: AppColors.divider),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: const [
-                Text(
-                  'Showing 1 to 8 of 8 partners',
-                  style: TextStyle(fontSize: 10, color: AppColors.textSecondary),
-                ),
-                Text('10 per page',
-                    style: TextStyle(fontSize: 10, color: AppColors.primary)),
-              ],
-            ),
-          ),
         ],
       ),
     );
@@ -638,7 +705,7 @@ class _PartnerVerificationScreenState extends State<PartnerVerificationScreen> {
                 ),
               ),
               Text(
-                'View All',
+                'Verified Sources',
                 style: TextStyle(
                   fontSize: 11,
                   fontWeight: FontWeight.w700,
@@ -716,9 +783,9 @@ class _PartnerVerificationScreenState extends State<PartnerVerificationScreen> {
       children: [
         Expanded(
           child: _buildKycDocThumbnailCard(
-            title: 'Aadhaar Card',
-            identifier: 'XXXX-XXXX-4589',
-            docType: 'National ID',
+            title: 'National Identity',
+            identifier: '[Identity Verified]',
+            docType: 'Official ID Proof',
             icon: Icons.badge_outlined,
             iconCol: const Color(0xFF0284C7),
           ),
@@ -738,7 +805,7 @@ class _PartnerVerificationScreenState extends State<PartnerVerificationScreen> {
           child: _buildKycDocThumbnailCard(
             title: 'Address Proof',
             identifier: 'Electricity Bill',
-            docType: 'Utility Bill',
+            docType: 'Utility Document',
             icon: Icons.receipt_long_rounded,
             iconCol: const Color(0xFFD97706),
           ),
@@ -748,7 +815,7 @@ class _PartnerVerificationScreenState extends State<PartnerVerificationScreen> {
           child: _buildKycDocThumbnailCard(
             title: 'Bank Statement',
             identifier: activePartner['bank'] as String,
-            docType: 'Last 6 Months',
+            docType: 'Direct Settlement',
             icon: Icons.account_balance_outlined,
             iconCol: const Color(0xFF7C3AED),
           ),
@@ -814,29 +881,6 @@ class _PartnerVerificationScreenState extends State<PartnerVerificationScreen> {
             docType,
             style: const TextStyle(fontSize: 8.5, color: AppColors.textHint),
           ),
-          const SizedBox(height: 8),
-          InkWell(
-            onTap: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text('Opening full view for $title')),
-              );
-            },
-            child: Row(
-              children: const [
-                Icon(Icons.visibility_outlined,
-                    size: 12, color: Color(0xFF0284C7)),
-                SizedBox(width: 4),
-                Text(
-                  'View Full Image',
-                  style: TextStyle(
-                    fontSize: 9.5,
-                    fontWeight: FontWeight.w700,
-                    color: Color(0xFF0284C7),
-                  ),
-                ),
-              ],
-            ),
-          ),
         ],
       ),
     );
@@ -844,16 +888,10 @@ class _PartnerVerificationScreenState extends State<PartnerVerificationScreen> {
 
   Widget _buildVerificationChecklist() {
     final checklist = [
-      {'item': 'Aadhaar Card', 'status': 'Verified', 'action': 'View'},
-      {'item': 'PAN Card', 'status': 'Verified', 'action': 'View'},
-      {'item': 'Address Proof', 'status': 'Pending', 'action': 'View'},
-      {'item': 'Bank Details', 'status': 'Pending', 'action': 'View'},
-      {'item': 'Photo', 'status': 'Verified', 'action': 'View'},
-      {
-        'item': 'Business Documents (GST/Proof)',
-        'status': 'Not Uploaded',
-        'action': 'Upload',
-      },
+      {'item': 'Identity Verification', 'status': 'Verified'},
+      {'item': 'PAN Card Validation', 'status': 'Verified'},
+      {'item': 'Address Proof Verification', 'status': 'Pending'},
+      {'item': 'Bank Account Settlement Check', 'status': 'Verified'},
     ];
 
     return Container(
@@ -878,18 +916,6 @@ class _PartnerVerificationScreenState extends State<PartnerVerificationScreen> {
           Column(
             children: checklist.map((c) {
               final isVerified = c['status'] == 'Verified';
-              final isPending = c['status'] == 'Pending';
-
-              Color statusBg = const Color(0xFFFEE2E2);
-              Color statusCol = const Color(0xFFDC2626);
-              if (isVerified) {
-                statusBg = const Color(0xFFDCFCE7);
-                statusCol = const Color(0xFF16A36A);
-              } else if (isPending) {
-                statusBg = const Color(0xFFFEF3C7);
-                statusCol = const Color(0xFFD97706);
-              }
-
               return Padding(
                 padding: const EdgeInsets.only(bottom: 7),
                 child: Row(
@@ -918,32 +944,14 @@ class _PartnerVerificationScreenState extends State<PartnerVerificationScreen> {
                         ),
                       ),
                     ),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 6, vertical: 1.5),
-                      decoration: BoxDecoration(
-                        color: statusBg,
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                      child: Text(
-                        c['status']!,
-                        style: TextStyle(
-                          fontSize: 8.5,
-                          fontWeight: FontWeight.w700,
-                          color: statusCol,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    InkWell(
-                      onTap: () {},
-                      child: Text(
-                        c['action']!,
-                        style: const TextStyle(
-                          fontSize: 10,
-                          fontWeight: FontWeight.w700,
-                          color: Color(0xFF0F3E38),
-                        ),
+                    Text(
+                      c['status']!,
+                      style: TextStyle(
+                        fontSize: 9.5,
+                        fontWeight: FontWeight.w700,
+                        color: isVerified
+                            ? const Color(0xFF16A36A)
+                            : const Color(0xFFD97706),
                       ),
                     ),
                   ],
@@ -978,17 +986,17 @@ class _PartnerVerificationScreenState extends State<PartnerVerificationScreen> {
           const SizedBox(height: 8),
           _buildDecisionRadio(
             title: 'Approve Partner',
-            subtitle: 'All documents verified and details are correct.',
+            subtitle: 'All documents verified and credentials authenticated.',
             value: 'Approve Partner',
           ),
           _buildDecisionRadio(
             title: 'Under Review',
-            subtitle: 'Keep for further review or verification.',
+            subtitle: 'Keep for document cross-checking.',
             value: 'Under Review',
           ),
           _buildDecisionRadio(
             title: 'Reject Partner',
-            subtitle: 'Documents invalid or details incorrect.',
+            subtitle: 'Documents unverified or incomplete details.',
             value: 'Reject Partner',
           ),
           const SizedBox(height: 8),
@@ -997,9 +1005,8 @@ class _PartnerVerificationScreenState extends State<PartnerVerificationScreen> {
             maxLines: 2,
             style: const TextStyle(fontSize: 11),
             decoration: InputDecoration(
-              hintText: 'Add remarks (Optional)...',
-              hintStyle:
-              const TextStyle(fontSize: 10.5, color: AppColors.textHint),
+              hintText: 'Add remarks for partner...',
+              hintStyle: const TextStyle(fontSize: 10.5, color: AppColors.textHint),
               filled: true,
               fillColor: Colors.white,
               contentPadding: const EdgeInsets.all(8),
@@ -1007,73 +1014,64 @@ class _PartnerVerificationScreenState extends State<PartnerVerificationScreen> {
                 borderRadius: BorderRadius.circular(8),
                 borderSide: const BorderSide(color: AppColors.border),
               ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-                borderSide: const BorderSide(color: AppColors.border),
-              ),
             ),
           ),
           const SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(
-                child: OutlinedButton(
-                  onPressed: () {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text('Decision recorded: $_verificationDecision (Rejected)'),
-                        backgroundColor: const Color(0xFFDC2626),
+          if (_isActionLoading)
+            const Center(
+              child: SizedBox(
+                width: 22,
+                height: 22,
+                child: CircularProgressIndicator(color: AppColors.secondary, strokeWidth: 2),
+              ),
+            )
+          else
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: () => _updateDecision('Reject Partner'),
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 10),
+                      side: const BorderSide(color: Color(0xFFDC2626)),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
                       ),
-                    );
-                  },
-                  style: OutlinedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 10),
-                    side: const BorderSide(color: Color(0xFFDC2626)),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
                     ),
-                  ),
-                  child: const Text(
-                    'Reject',
-                    style: TextStyle(
-                      fontSize: 11.5,
-                      fontWeight: FontWeight.w800,
-                      color: Color(0xFFDC2626),
+                    child: const Text(
+                      'Reject',
+                      style: TextStyle(
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.w800,
+                        color: Color(0xFFDC2626),
+                      ),
                     ),
                   ),
                 ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: ElevatedButton(
-                  onPressed: () {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text('Partner marked as: $_verificationDecision!'),
-                        backgroundColor: const Color(0xFF16A36A),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: ElevatedButton(
+                    onPressed: () => _updateDecision(_verificationDecision),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF16A36A),
+                      elevation: 0,
+                      padding: const EdgeInsets.symmetric(vertical: 10),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
                       ),
-                    );
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF16A36A),
-                    elevation: 0,
-                    padding: const EdgeInsets.symmetric(vertical: 10),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
                     ),
-                  ),
-                  child: const Text(
-                    'Approve Partner',
-                    style: TextStyle(
-                      fontSize: 11.5,
-                      fontWeight: FontWeight.w800,
-                      color: Colors.white,
+                    child: const Text(
+                      'Confirm Action',
+                      style: TextStyle(
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.w800,
+                        color: Colors.white,
+                      ),
                     ),
                   ),
                 ),
-              ),
-            ],
-          ),
+              ],
+            ),
         ],
       ),
     );

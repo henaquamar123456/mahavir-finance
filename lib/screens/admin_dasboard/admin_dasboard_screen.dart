@@ -1,9 +1,100 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 
+import '../../../../constants/api_urls.dart';
 import '../../../../constants/app_colors.dart';
+import '../../../../core/servicess/shared_pref_helper.dart';
+import '../../../../utils/currency_formatter.dart';
 
-class AdminDashboardScreen extends StatelessWidget {
+class AdminDashboardScreen extends StatefulWidget {
   const AdminDashboardScreen({super.key});
+
+  @override
+  State<AdminDashboardScreen> createState() => _AdminDashboardScreenState();
+}
+
+class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
+  bool _isLoading = true;
+
+  int _totalCustomers = 0;
+  int _totalPartners = 0;
+  int _totalLeads = 0;
+  int _pendingLeads = 0;
+  int _underReviewLeads = 0;
+  int _approvedLeads = 0;
+  int _rejectedLeads = 0;
+  double _totalDisbursed = 0.0;
+  double _totalCommission = 0.0;
+
+  List _recentLeads = [];
+  List _topPartners = [];
+  List _categoryBreakdown = [];
+  List _monthlyOverview = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadDashboardStats();
+  }
+
+  Future<void> _loadDashboardStats() async {
+    setState(() => _isLoading = true);
+    try {
+      final token = await SharedPrefHelper.getToken();
+      final url = Uri.parse(MFUrls.mfBaseUrl('api/v1/admin/dashboard-stats'));
+
+      final response = await http.get(
+        url,
+        headers: {
+          'Content-Type': 'application/json',
+          if (token != null) 'Authorization': 'Bearer $token',
+        },
+      ).timeout(const Duration(seconds: 12));
+
+      if (response.statusCode == 200) {
+        final Map<String, dynamic> data = jsonDecode(response.body)['data'] ?? {};
+        if (mounted) {
+          setState(() {
+            _totalCustomers = data['totalCustomers'] ?? 0;
+            _totalPartners = data['totalPartners'] ?? 0;
+            _totalLeads = data['totalLeads'] ?? 0;
+            _pendingLeads = data['pendingLeads'] ?? 0;
+            _underReviewLeads = data['underReviewLeads'] ?? 0;
+            _approvedLeads = data['approvedLeads'] ?? 0;
+            _rejectedLeads = data['rejectedLeads'] ?? 0;
+            _totalDisbursed = (data['totalDisbursed'] as num?)?.toDouble() ?? 0.0;
+            _totalCommission = (data['totalCommission'] as num?)?.toDouble() ?? (_totalDisbursed * 0.015);
+
+            _recentLeads = (data['recentLeads'] as List<dynamic>?)
+                ?.map((e) => Map<String, dynamic>.from(e))
+                .toList() ??
+                [];
+
+            _topPartners = (data['topPartners'] as List<dynamic>?)
+                ?.map((e) => Map<String, dynamic>.from(e))
+                .toList() ??
+                [];
+
+            _categoryBreakdown = (data['categoryBreakdown'] as List<dynamic>?)
+                ?.map((e) => Map<String, dynamic>.from(e))
+                .toList() ??
+                [];
+
+            _monthlyOverview = (data['monthlyOverview'] as List<dynamic>?)
+                ?.map((e) => Map<String, dynamic>.from(e))
+                .toList() ??
+                [];
+
+            _isLoading = false;
+          });
+          return;
+        }
+      }
+    } catch (_) {}
+
+    if (mounted) setState(() => _isLoading = false);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -12,58 +103,42 @@ class AdminDashboardScreen extends StatelessWidget {
       appBar: AppBar(
         backgroundColor: Colors.white,
         elevation: 0,
-        title: Row(
+        title: const Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: const [
-                Text(
-                  'Welcome Back, Admin!',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: AppColors.primary),
-                ),
-                Text(
-                  "Here's what's happening with Mahavir Finance today.",
-                  style: TextStyle(fontSize: 11, color: AppColors.textSecondary),
-                ),
-              ],
+            Text(
+              'Welcome Back, Admin!',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w900,
+                color: AppColors.primary,
+              ),
+            ),
+            Text(
+              "Here's what's happening with Mahavir Finance today.",
+              style: TextStyle(fontSize: 11, color: AppColors.textSecondary),
             ),
           ],
         ),
         actions: [
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-            margin: const EdgeInsets.only(right: 12),
-            decoration: BoxDecoration(
-              color: const Color(0xFFF1F5F9),
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: AppColors.border),
-            ),
-            child: Row(
-              children: const [
-                Icon(Icons.calendar_today_outlined, size: 13, color: AppColors.textSecondary),
-                SizedBox(width: 6),
-                Text(
-                  '01 Sep 2024 - 30 Sep 2024',
-                  style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.primary),
-                ),
-              ],
-            ),
-          ),
           IconButton(
-            icon: const Icon(Icons.notifications_outlined, color: AppColors.primary, size: 22),
-            onPressed: () {},
+            icon: const Icon(Icons.refresh_rounded, color: AppColors.primary, size: 22),
+            tooltip: 'Refresh Dashboard',
+            onPressed: _loadDashboardStats,
           ),
           const SizedBox(width: 8),
         ],
       ),
       body: SafeArea(
-        child: SingleChildScrollView(
+        child: _isLoading
+            ? const Center(child: CircularProgressIndicator(color: AppColors.secondary))
+            : SingleChildScrollView(
           physics: const BouncingScrollPhysics(),
           padding: const EdgeInsets.all(16),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // 1. Top 5 Metric Cards
+              // 1. Top 4 Metric Cards
               _buildTopMetricsRow(),
               const SizedBox(height: 14),
 
@@ -99,24 +174,70 @@ class AdminDashboardScreen extends StatelessWidget {
     );
   }
 
-  // 1. Five Main Metric Cards
+  // 1. Metric Cards
   Widget _buildTopMetricsRow() {
     return Row(
       children: [
-        Expanded(child: _buildMetricCard('Total Customers', '1,248', '+12%', '+132 this month', Icons.people_rounded, const Color(0xFF0284C7), const Color(0xFFE0F2FE))),
+        Expanded(
+          child: _buildMetricCard(
+            'Total Customers',
+            '$_totalCustomers',
+            '+Active',
+            'Registered Borrowers',
+            Icons.people_rounded,
+            const Color(0xFF0284C7),
+            const Color(0xFFE0F2FE),
+          ),
+        ),
         const SizedBox(width: 10),
-        Expanded(child: _buildMetricCard('Total Partners', '86', '+8%', '+6 this month', Icons.handshake_rounded, const Color(0xFF16A36A), const Color(0xFFDCFCE7))),
+        Expanded(
+          child: _buildMetricCard(
+            'Total Partners',
+            '$_totalPartners',
+            'DSA',
+            'Active Agents',
+            Icons.handshake_rounded,
+            const Color(0xFF16A36A),
+            const Color(0xFFDCFCE7),
+          ),
+        ),
         const SizedBox(width: 10),
-        Expanded(child: _buildMetricCard('Total Loan Leads', '524', '+18%', '+80 this month', Icons.description_rounded, const Color(0xFF7C3AED), const Color(0xFFF3E8FF))),
+        Expanded(
+          child: _buildMetricCard(
+            'Total Loan Leads',
+            '$_totalLeads',
+            'Pipeline',
+            'Applications',
+            Icons.description_rounded,
+            const Color(0xFF7C3AED),
+            const Color(0xFFF3E8FF),
+          ),
+        ),
         const SizedBox(width: 10),
-        Expanded(child: _buildMetricCard('Total Disbursed', '1.28 Cr', '+22%', '+23.5 L this month', Icons.currency_rupee_rounded, const Color(0xFF0F3E38), const Color(0xFFE6F7F2))),
-        const SizedBox(width: 10),
-        Expanded(child: _buildMetricCard('Total Commission', '12.8 L', '+15%', 'For 86 partners', Icons.account_balance_wallet_rounded, const Color(0xFFD97706), const Color(0xFFFEF3C7))),
+        Expanded(
+          child: _buildMetricCard(
+            'Total Disbursed',
+            CurrencyFormatter.formatWhole(_totalDisbursed),
+            'Volume',
+            'Disbursed loans',
+            Icons.currency_rupee_rounded,
+            const Color(0xFF0F3E38),
+            const Color(0xFFE6F7F2),
+          ),
+        ),
       ],
     );
   }
 
-  Widget _buildMetricCard(String title, String val, String badge, String sub, IconData icon, Color col, Color bg) {
+  Widget _buildMetricCard(
+      String title,
+      String val,
+      String badge,
+      String sub,
+      IconData icon,
+      Color col,
+      Color bg,
+      ) {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
@@ -130,11 +251,28 @@ class AdminDashboardScreen extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(title, style: const TextStyle(fontSize: 11, color: AppColors.textSecondary, fontWeight: FontWeight.w600)),
+              Text(
+                title,
+                style: const TextStyle(
+                  fontSize: 11,
+                  color: AppColors.textSecondary,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
-                decoration: BoxDecoration(color: const Color(0xFFDCFCE7), borderRadius: BorderRadius.circular(4)),
-                child: Text(badge, style: const TextStyle(fontSize: 9.5, fontWeight: FontWeight.w800, color: Color(0xFF16A36A))),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFDCFCE7),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: Text(
+                  badge,
+                  style: const TextStyle(
+                    fontSize: 9.5,
+                    fontWeight: FontWeight.w800,
+                    color: Color(0xFF16A36A),
+                  ),
+                ),
               ),
             ],
           ),
@@ -143,7 +281,18 @@ class AdminDashboardScreen extends StatelessWidget {
             children: [
               CircleAvatar(radius: 12, backgroundColor: bg, child: Icon(icon, size: 13, color: col)),
               const SizedBox(width: 8),
-              Text(val, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w900, color: AppColors.primary)),
+              Flexible(
+                child: Text(
+                  val,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w900,
+                    color: AppColors.primary,
+                  ),
+                ),
+              ),
             ],
           ),
           const SizedBox(height: 4),
@@ -153,17 +302,17 @@ class AdminDashboardScreen extends StatelessWidget {
     );
   }
 
-  // 2. Lead Status Breakdown Badges
+  // 2. Status Row
   Widget _buildLeadStatusRow() {
     return Row(
       children: [
-        Expanded(child: _buildStatusPill('Pending Leads', '156', '↑ 20%', const Color(0xFFD97706), const Color(0xFFFEF3C7))),
+        Expanded(child: _buildStatusPill('Pending Leads', '$_pendingLeads', 'Pipeline', const Color(0xFFD97706), const Color(0xFFFEF3C7))),
         const SizedBox(width: 10),
-        Expanded(child: _buildStatusPill('Under Review', '84', '↑ 14%', const Color(0xFF0284C7), const Color(0xFFE0F2FE))),
+        Expanded(child: _buildStatusPill('Under Review', '$_underReviewLeads', 'Reviewing', const Color(0xFF0284C7), const Color(0xFFE0F2FE))),
         const SizedBox(width: 10),
-        Expanded(child: _buildStatusPill('Approved Leads', '312', '+10%', const Color(0xFF16A36A), const Color(0xFFDCFCE7))),
+        Expanded(child: _buildStatusPill('Approved Leads', '$_approvedLeads', 'Approved', const Color(0xFF16A36A), const Color(0xFFDCFCE7))),
         const SizedBox(width: 10),
-        Expanded(child: _buildStatusPill('Rejected Leads', '56', '↓ 5%', const Color(0xFFDC2626), const Color(0xFFFEE2E2))),
+        Expanded(child: _buildStatusPill('Rejected Leads', '$_rejectedLeads', 'Declined', const Color(0xFFDC2626), const Color(0xFFFEE2E2))),
       ],
     );
   }
@@ -192,18 +341,84 @@ class AdminDashboardScreen extends StatelessWidget {
     );
   }
 
-  // 3. Monthly Bar Chart Card (Jan - Sep)
+  // 3. Dynamic Monthly Bar Chart
   Widget _buildMonthlyBarChartCard() {
-    final months = [
-      {'m': 'Jan', 'val': 45},
-      {'m': 'Feb', 'val': 70},
-      {'m': 'Mar', 'val': 110},
-      {'m': 'Apr', 'val': 95},
-      {'m': 'May', 'val': 140},
-      {'m': 'Jun', 'val': 120},
-      {'m': 'Jul', 'val': 160},
-      {'m': 'Aug', 'val': 185},
-      {'m': 'Sep', 'val': 210, 'isMax': true},
+    final list = _monthlyOverview.isNotEmpty
+        ? _monthlyOverview
+        : [
+      {'m': 'Jan', 'val': 0},
+      {'m': 'Feb', 'val': 0},
+      {'m': 'Mar', 'val': 0},
+      {'m': 'Apr', 'val': 0},
+      {'m': 'May', 'val': 0},
+      {'m': 'Jun', 'val': 0},
+    ];
+
+    int maxVal = 1;
+    for (var item in list) {
+      final v = (item['val'] as num?)?.toInt() ?? 0;
+      if (v > maxVal) maxVal = v;
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Lead Submissions Overview',
+            style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w800, color: AppColors.primary),
+          ),
+          const SizedBox(height: 16),
+          SizedBox(
+            height: 140,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: list.map((m) {
+                final val = (m['val'] as num?)?.toDouble() ?? 0.0;
+                final barHeight = (val / maxVal) * 105.0;
+
+                return Column(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    Container(
+                      width: 18,
+                      height: barHeight > 6 ? barHeight : 6,
+                      decoration: BoxDecoration(
+                        color: val == maxVal && val > 0
+                            ? const Color(0xFF0F3E38)
+                            : const Color(0xFF16A36A),
+                        borderRadius: const BorderRadius.vertical(top: Radius.circular(4)),
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      m['m'].toString(),
+                      style: const TextStyle(fontSize: 9.5, color: AppColors.textSecondary),
+                    ),
+                  ],
+                );
+              }).toList(),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // 4. Dynamic Category Breakdown
+  Widget _buildCategoryBreakdownCard() {
+    final categories = _categoryBreakdown.isNotEmpty
+        ? _categoryBreakdown
+        : [
+      {'name': 'Home Loan', 'pct': '0%', 'color': '#0F3E38'},
+      {'name': 'Personal Loan', 'pct': '0%', 'color': '#16A36A'},
     ];
 
     return Container(
@@ -219,105 +434,40 @@ class AdminDashboardScreen extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: const [
-                  Text('Lead Overview', style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w800, color: AppColors.primary)),
-                  Text('Monthly loan submissions and conversions', style: TextStyle(fontSize: 10, color: AppColors.textSecondary)),
-                ],
+              const Text(
+                'Top Loan Categories',
+                style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w800, color: AppColors.primary),
               ),
-              Row(
-                children: [
-                  _buildLegend(const Color(0xFF0F3E38), 'Submitted'),
-                  const SizedBox(width: 8),
-                  _buildLegend(const Color(0xFF16A36A), 'Approved'),
-                ],
+              Text(
+                'Total $_totalLeads',
+                style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: Color(0xFF0F3E38)),
               ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          SizedBox(
-            height: 140,
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: months.map((m) {
-                final height = ((m['val'] as int) / 220) * 110;
-                final isMax = m['isMax'] == true;
-
-                return Column(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: [
-                    Container(
-                      width: 18,
-                      height: height,
-                      decoration: BoxDecoration(
-                        color: isMax ? const Color(0xFF0F3E38) : const Color(0xFF16A36A),
-                        borderRadius: const BorderRadius.vertical(top: Radius.circular(4)),
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    Text(m['m'] as String, style: const TextStyle(fontSize: 9.5, color: AppColors.textSecondary)),
-                  ],
-                );
-              }).toList(),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildLegend(Color col, String label) {
-    return Row(
-      children: [
-        CircleAvatar(radius: 3, backgroundColor: col),
-        const SizedBox(width: 4),
-        Text(label, style: const TextStyle(fontSize: 9.5, color: AppColors.textSecondary)),
-      ],
-    );
-  }
-
-  // Category Breakdown
-  Widget _buildCategoryBreakdownCard() {
-    final categories = [
-      {'name': 'Home Loan', 'pct': '28%', 'count': '148', 'color': const Color(0xFF0F3E38)},
-      {'name': 'Personal Loan', 'pct': '22%', 'count': '115', 'color': const Color(0xFF16A36A)},
-      {'name': 'Car Loan', 'pct': '18%', 'count': '94', 'color': const Color(0xFF0284C7)},
-      {'name': 'Business Loan', 'pct': '15%', 'count': '78', 'color': const Color(0xFF7C3AED)},
-      {'name': 'Education Loan', 'pct': '10%', 'count': '52', 'color': const Color(0xFFD97706)},
-      {'name': 'Other Loans', 'pct': '7%', 'count': '37', 'color': const Color(0xFF94A3B8)},
-    ];
-
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.border),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: const [
-              Text('Loan Category Wise', style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w800, color: AppColors.primary)),
-              Text('Total 524', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: Color(0xFF0F3E38))),
             ],
           ),
           const SizedBox(height: 12),
           ...categories.map((c) {
+            Color dotColor = const Color(0xFF0F3E38);
+            if (c['color'] != null) {
+              final hex = c['color'].toString().replaceAll('#', '');
+              dotColor = Color(int.parse('FF$hex', radix: 16));
+            }
+
             return Padding(
-              padding: const EdgeInsets.only(bottom: 6),
+              padding: const EdgeInsets.only(bottom: 8),
               child: Row(
                 children: [
-                  CircleAvatar(radius: 4, backgroundColor: c['color'] as Color),
+                  CircleAvatar(radius: 4, backgroundColor: dotColor),
                   const SizedBox(width: 8),
                   Expanded(
-                    child: Text(c['name'] as String, style: const TextStyle(fontSize: 10.5, color: AppColors.primary)),
+                    child: Text(
+                      c['name'].toString(),
+                      style: const TextStyle(fontSize: 11, color: AppColors.primary),
+                    ),
                   ),
-                  Text('${c['pct']} (${c['count']})', style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.w700, color: AppColors.primary)),
+                  Text(
+                    '${c['pct']} (${c['count'] ?? 0})',
+                    style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.w700, color: AppColors.primary),
+                  ),
                 ],
               ),
             );
@@ -327,16 +477,8 @@ class AdminDashboardScreen extends StatelessWidget {
     );
   }
 
-  // 4. Recent Loan Leads Table
+  // 5. Dynamic Recent Leads Table
   Widget _buildRecentLeadsTable() {
-    final leads = [
-      {'name': 'Amit Shah', 'type': 'Home Loan', 'amount': '₹25,00,000', 'status': 'Approved', 'statusBg': const Color(0xFFDCFCE7), 'statusCol': const Color(0xFF16A36A), 'date': '12 Sep 2024'},
-      {'name': 'Priya Verma', 'type': 'Car Loan', 'amount': '₹8,00,000', 'status': 'Under Review', 'statusBg': const Color(0xFFE0F2FE), 'statusCol': const Color(0xFF0284C7), 'date': '12 Sep 2024'},
-      {'name': 'Rohan Mehta', 'type': 'Personal Loan', 'amount': '₹5,00,000', 'status': 'Submitted', 'statusBg': const Color(0xFFFEF3C7), 'statusCol': const Color(0xFFD97706), 'date': '11 Sep 2024'},
-      {'name': 'Neha Singh', 'type': 'Education Loan', 'amount': '₹10,00,000', 'status': 'Rejected', 'statusBg': const Color(0xFFFEE2E2), 'statusCol': const Color(0xFFDC2626), 'date': '10 Sep 2024'},
-      {'name': 'Suresh Patel', 'type': 'Business Loan', 'amount': '₹15,00,000', 'status': 'Approved', 'statusBg': const Color(0xFFDCFCE7), 'statusCol': const Color(0xFF16A36A), 'date': '10 Sep 2024'},
-    ];
-
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
@@ -347,62 +489,87 @@ class AdminDashboardScreen extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: const [
-              Text('Recent Loan Leads', style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w800, color: AppColors.primary)),
-              Text('View All >', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Color(0xFF0F3E38))),
-            ],
+          const Text(
+            'Recent Loan Leads Queue',
+            style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w800, color: AppColors.primary),
           ),
           const SizedBox(height: 10),
-          ...leads.map((l) {
-            return Container(
-              margin: const EdgeInsets.only(bottom: 6),
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-              decoration: BoxDecoration(
-                color: const Color(0xFFF8FAFC),
-                borderRadius: BorderRadius.circular(8),
+          if (_recentLeads.isEmpty)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 24),
+              child: Center(
+                child: Text('No loan applications submitted yet.', style: TextStyle(fontSize: 11, color: AppColors.textSecondary)),
               ),
-              child: Row(
-                children: [
-                  Expanded(
-                    flex: 3,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(l['name'] as String, style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: AppColors.primary)),
-                        Text(l['type'] as String, style: const TextStyle(fontSize: 9.5, color: AppColors.textSecondary)),
-                      ],
+            )
+          else
+            ..._recentLeads.map((l) {
+              final String status = l['status']?.toString() ?? 'Under Review';
+              final isApproved = status.toLowerCase() == 'approved' || status.toLowerCase() == 'disbursed';
+              final isRejected = status.toLowerCase() == 'rejected';
+
+              Color statusBg = const Color(0xFFE0F2FE);
+              Color statusCol = const Color(0xFF0284C7);
+              if (isApproved) {
+                statusBg = const Color(0xFFDCFCE7);
+                statusCol = const Color(0xFF16A36A);
+              } else if (isRejected) {
+                statusBg = const Color(0xFFFEE2E2);
+                statusCol = const Color(0xFFDC2626);
+              }
+
+              final amt = (l['amount'] as num?)?.toDouble() ?? 0.0;
+
+              return Container(
+                margin: const EdgeInsets.only(bottom: 6),
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF8FAFC),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      flex: 4,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            l['name']?.toString() ?? 'Borrower',
+                            style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: AppColors.primary),
+                          ),
+                          Text(
+                            '${l['type']} • ${l['date']}',
+                            style: const TextStyle(fontSize: 9.5, color: AppColors.textSecondary),
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
-                  Expanded(
-                    flex: 2,
-                    child: Text(l['amount'] as String, style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w800, color: AppColors.primary)),
-                  ),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                    decoration: BoxDecoration(color: l['statusBg'] as Color, borderRadius: BorderRadius.circular(4)),
-                    child: Text(l['status'] as String, style: TextStyle(fontSize: 9, fontWeight: FontWeight.w700, color: l['statusCol'] as Color)),
-                  ),
-                ],
-              ),
-            );
-          }),
+                    Expanded(
+                      flex: 3,
+                      child: Text(
+                        CurrencyFormatter.formatWhole(amt),
+                        style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w800, color: AppColors.primary),
+                      ),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(color: statusBg, borderRadius: BorderRadius.circular(4)),
+                      child: Text(
+                        status,
+                        style: TextStyle(fontSize: 9, fontWeight: FontWeight.w700, color: statusCol),
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            }),
         ],
       ),
     );
   }
 
-  // Top Performing Partners Table
+  // 6. Dynamic Top Partners Table
   Widget _buildTopPartnersTable() {
-    final partners = [
-      {'name': 'Rahul Kumar', 'leads': '48', 'approved': '32', 'comm': '₹2,40,000'},
-      {'name': 'Amit Yadav', 'leads': '36', 'approved': '25', 'comm': '₹1,85,000'},
-      {'name': 'Sunil Sharma', 'leads': '32', 'approved': '20', 'comm': '₹1,60,000'},
-      {'name': 'Pooja Singh', 'leads': '28', 'approved': '18', 'comm': '₹1,25,000'},
-      {'name': 'Vikash Singh', 'leads': '24', 'approved': '15', 'comm': '₹1,10,000'},
-    ];
-
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
@@ -413,44 +580,64 @@ class AdminDashboardScreen extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: const [
-              Text('Top Performing Partners', style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w800, color: AppColors.primary)),
-              Text('View All >', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Color(0xFF0F3E38))),
-            ],
+          const Text(
+            'Top Performing Partners',
+            style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w800, color: AppColors.primary),
           ),
           const SizedBox(height: 10),
-          ...partners.map((p) {
-            return Container(
-              margin: const EdgeInsets.only(bottom: 6),
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-              decoration: BoxDecoration(
-                color: const Color(0xFFF8FAFC),
-                borderRadius: BorderRadius.circular(8),
+          if (_topPartners.isEmpty)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 24),
+              child: Center(
+                child: Text('No partners registered yet.', style: TextStyle(fontSize: 11, color: AppColors.textSecondary)),
               ),
-              child: Row(
-                children: [
-                  CircleAvatar(
-                    radius: 12,
-                    backgroundColor: const Color(0xFF0F3E38).withValues(alpha: 0.1),
-                    child: Text((p['name'] as String)[0], style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: Color(0xFF0F3E38))),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(p['name'] as String, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.primary)),
-                        Text('${p['approved']}/${p['leads']} leads approved', style: const TextStyle(fontSize: 9, color: AppColors.textSecondary)),
-                      ],
+            )
+          else
+            ..._topPartners.map((p) {
+              final name = p['name']?.toString() ?? 'Partner';
+              final comm = (p['comm'] as num?)?.toDouble() ?? 0.0;
+
+              return Container(
+                margin: const EdgeInsets.only(bottom: 6),
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF8FAFC),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Row(
+                  children: [
+                    CircleAvatar(
+                      radius: 12,
+                      backgroundColor: const Color(0xFF0F3E38).withValues(alpha: 0.1),
+                      child: Text(
+                        name.isNotEmpty ? name[0].toUpperCase() : 'P',
+                        style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: Color(0xFF0F3E38)),
+                      ),
                     ),
-                  ),
-                  Text(p['comm'] as String, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: Color(0xFF16A36A))),
-                ],
-              ),
-            );
-          }),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            name,
+                            style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.primary),
+                          ),
+                          Text(
+                            '${p['approved']}/${p['leads']} leads approved',
+                            style: const TextStyle(fontSize: 9, color: AppColors.textSecondary),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Text(
+                      CurrencyFormatter.formatWhole(comm),
+                      style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: Color(0xFF16A36A)),
+                    ),
+                  ],
+                ),
+              );
+            }),
         ],
       ),
     );

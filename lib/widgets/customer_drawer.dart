@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../constants/app_colors.dart';
 import '../constants/theme/app_text_styles.dart';
+import '../core/servicess/shared_pref_helper.dart';
 import '../screens/auth/login/login_screen.dart';
 import '../screens/customer-section/about/about_us_screen.dart';
 import '../screens/customer-section/blog/blog_list_screen.dart';
@@ -12,8 +13,71 @@ import '../screens/customer-section/gallery/gallery_screen.dart';
 import '../screens/customer-section/home/customer_home_provider.dart';
 import '../screens/customer-section/inquiries/inquiry_history_screen.dart';
 
-class CustomerDrawer extends StatelessWidget {
+class CustomerDrawer extends StatefulWidget {
   const CustomerDrawer({super.key});
+
+  @override
+  State<CustomerDrawer> createState() => _CustomerDrawerState();
+}
+
+class _CustomerDrawerState extends State<CustomerDrawer> {
+  String _userName = 'Customer';
+  String _userEmail = '';
+  String _userPhone = '';
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadUserProfile();
+  }
+
+  /// Shared Preferences se logged-in user ka real data fetch karna
+  Future<void> _loadUserProfile() async {
+    try {
+      final data = await SharedPrefHelper.getUserData();
+      if (mounted) {
+        setState(() {
+          _userName = data['name'] ?? 'Mahavir Customer';
+          _userEmail = data['email'] ?? '';
+          _userPhone = data['phone'] ?? '';
+          _isLoading = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
+  }
+
+  /// User Name se initials generate karna (e.g. Rohit Kumar -> RK)
+  String _getInitials(String name) {
+    if (name.trim().isEmpty) return 'U';
+    final parts = name.trim().split(RegExp(r'\s+'));
+    if (parts.length == 1) {
+      return parts[0][0].toUpperCase();
+    }
+    return '${parts[0][0]}${parts[1][0]}'.toUpperCase();
+  }
+
+  /// Real Session Logout
+  Future<void> _handleLogout() async {
+    try {
+      await SharedPrefHelper.clearSession();
+    } catch (_) {
+      // Fallback
+    }
+
+    if (!mounted) return;
+
+    Navigator.pop(context); // Close Drawer
+    Navigator.pushAndRemoveUntil(
+      context,
+      MaterialPageRoute(builder: (_) => const LoginScreen()),
+          (route) => false,
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -28,7 +92,7 @@ class CustomerDrawer extends StatelessWidget {
       ),
       child: Column(
         children: [
-          // 1. Premium Header with Profile Overview
+          // 1. Dynamic Header with Logged-in Profile
           _buildDrawerHeader(context, homeProvider),
 
           // 2. Scrollable Navigation Sections
@@ -104,6 +168,23 @@ class CustomerDrawer extends StatelessWidget {
                 const Divider(height: 1, color: AppColors.divider),
                 const SizedBox(height: 14),
 
+                _buildSectionHeader('PARTNER NETWORK'),
+                const SizedBox(height: 6),
+                _buildDrawerItem(
+                  icon: Icons.handshake_rounded,
+                  title: 'Become a Partner (DSA)',
+                  badge: 'Earn',
+                  badgeColor: const Color(0xFFD97706),
+                  onTap: () {
+                    Navigator.pop(context);
+                    homeProvider.setBottomNavIndex(3); // Services / Partner inquiry
+                  },
+                ),
+
+                const SizedBox(height: 14),
+                const Divider(height: 1, color: AppColors.divider),
+                const SizedBox(height: 14),
+
                 _buildSectionHeader('COMPANY & KNOWLEDGE'),
                 const SizedBox(height: 6),
                 _buildDrawerItem(
@@ -167,7 +248,7 @@ class CustomerDrawer extends StatelessWidget {
             ),
           ),
 
-          // 3. Bottom Footer (Logout Button + Version Badge)
+          // 3. Bottom Footer (Real Session Logout)
           _buildDrawerFooter(context),
         ],
       ),
@@ -202,21 +283,25 @@ class CustomerDrawer extends StatelessWidget {
         children: [
           Row(
             children: [
-              // Profile Photo with Verified Ring
+              // Dynamic Initials Avatar
               Stack(
                 children: [
                   Container(
-                    width: 58,
-                    height: 58,
+                    width: 56,
+                    height: 56,
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
                       border: Border.all(color: Colors.white, width: 2.2),
-                      color: const Color(0xFFF1F5F9),
+                      color: AppColors.secondary,
                     ),
-                    child: const Icon(
-                      Icons.person_rounded,
-                      size: 34,
-                      color: AppColors.primary,
+                    alignment: Alignment.center,
+                    child: Text(
+                      _getInitials(_userName),
+                      style: const TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.w800,
+                        color: Colors.white,
+                      ),
                     ),
                   ),
                   Positioned(
@@ -225,10 +310,10 @@ class CustomerDrawer extends StatelessWidget {
                     child: Container(
                       padding: const EdgeInsets.all(3),
                       decoration: const BoxDecoration(
-                        color: AppColors.secondary,
+                        color: Colors.white,
                         shape: BoxShape.circle,
                       ),
-                      child: const Icon(Icons.check, size: 11, color: Colors.white),
+                      child: const Icon(Icons.check_circle, size: 14, color: AppColors.secondary),
                     ),
                   ),
                 ],
@@ -238,11 +323,11 @@ class CustomerDrawer extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
-                      'Rohit Kumar',
+                    Text(
+                      _isLoading ? 'Loading...' : _userName,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
+                      style: const TextStyle(
                         fontSize: 16.5,
                         fontWeight: FontWeight.w800,
                         color: Colors.white,
@@ -250,7 +335,7 @@ class CustomerDrawer extends StatelessWidget {
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      'rohit.kumar@gmail.com',
+                      _userEmail.isNotEmpty ? _userEmail : _userPhone,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
@@ -419,7 +504,6 @@ class CustomerDrawer extends StatelessWidget {
       ),
       child: Column(
         children: [
-          // Logout Option
           InkWell(
             onTap: () => _showLogoutDialog(context),
             borderRadius: BorderRadius.circular(12),
@@ -448,7 +532,6 @@ class CustomerDrawer extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 12),
-          // App Compliance & Version Info
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
@@ -486,13 +569,8 @@ class CustomerDrawer extends StatelessWidget {
           ),
           ElevatedButton(
             onPressed: () {
-              Navigator.pop(ctx); // Close dialog
-              Navigator.pop(context); // Close drawer
-              Navigator.pushAndRemoveUntil(
-                context,
-                MaterialPageRoute(builder: (_) => const LoginScreen()),
-                    (route) => false,
-              );
+              Navigator.pop(ctx);
+              _handleLogout();
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: AppColors.error,

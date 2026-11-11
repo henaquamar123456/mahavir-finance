@@ -7,8 +7,10 @@ import 'package:provider/provider.dart';
 
 import '../../../../constants/app_colors.dart';
 import '../../../../constants/asset_constants.dart';
+import '../../../../core/servicess/shared_pref_helper.dart';
 import '../../../../utils/currency_formatter.dart';
 import '../../../p_models/partner_model_screen.dart';
+import '../../auth/login/login_screen.dart';
 import '../earnings/earning_screen.dart';
 import '../leads/add_new_lead_screen.dart';
 import '../leads/lead_details_screen.dart';
@@ -75,15 +77,21 @@ class _PartnerDashboardView extends StatelessWidget {
               ],
             ),
             onPressed: () {
-              Navigator.push(context, MaterialPageRoute(builder: (context) => NotificationsScreen(),));
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const NotificationsScreen()),
+              );
             },
           ),
           Padding(
             padding: const EdgeInsets.only(right: 14),
-            child: CircleAvatar(
-              radius: 17,
-              backgroundColor: AppColors.primary.withValues(alpha: 0.1),
-              child: const Icon(Icons.person, size: 20, color: AppColors.primary),
+            child: InkWell(
+              onTap: () => provider.setBottomNavIndex(4),
+              child: CircleAvatar(
+                radius: 17,
+                backgroundColor: AppColors.primary.withValues(alpha: 0.1),
+                child: const Icon(Icons.person, size: 20, color: AppColors.primary),
+              ),
             ),
           ),
         ],
@@ -94,8 +102,8 @@ class _PartnerDashboardView extends StatelessWidget {
           _buildDashboardTab(context, provider), // Tab 0
           const MyLeadsScreen(),                 // Tab 1
           const EarningsScreen(),                // Tab 2
-          const CustomerListScreen(),// Tab 3
-          const PartnerProfileScreen(),
+          const CustomerListScreen(),            // Tab 3
+          const PartnerProfileScreen(),          // Tab 4
         ],
       ),
       bottomNavigationBar: NavigationBar(
@@ -122,8 +130,8 @@ class _PartnerDashboardView extends StatelessWidget {
             selectedIcon: Icon(Icons.bar_chart, color: AppColors.secondary),
             label: 'Earnings',
           ),
-           NavigationDestination(
-            icon: Icon(Icons.group),
+          NavigationDestination(
+            icon: Icon(Icons.group_outlined),
             selectedIcon: Icon(Icons.group, color: AppColors.secondary),
             label: 'Customer',
           ),
@@ -137,7 +145,7 @@ class _PartnerDashboardView extends StatelessWidget {
     );
   }
 
-  // --- Side Drawer ---
+  // --- Dynamic Side Drawer ---
   Widget _buildPartnerDrawer(BuildContext context, PartnerDashboardProvider provider) {
     return Drawer(
       backgroundColor: Colors.white,
@@ -165,18 +173,20 @@ class _PartnerDashboardView extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text(
-                          'Rajesh Kumar',
-                          style: TextStyle(
+                        Text(
+                          provider.partnerName,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.w800,
                             color: AppColors.primary,
                           ),
                         ),
                         const SizedBox(height: 2),
-                        const Text(
-                          'ID: MFP00124',
-                          style: TextStyle(
+                        Text(
+                          'ID: ${provider.partnerId}',
+                          style: const TextStyle(
                             fontSize: 11.5,
                             fontWeight: FontWeight.w700,
                             color: Color(0xFF0F3E38),
@@ -248,7 +258,7 @@ class _PartnerDashboardView extends StatelessWidget {
                     title: 'Partner Profile',
                     onTap: () {
                       Navigator.pop(context);
-                      provider.setBottomNavIndex(3);
+                      provider.setBottomNavIndex(4);
                     },
                   ),
                   const Padding(
@@ -259,7 +269,11 @@ class _PartnerDashboardView extends StatelessWidget {
                     icon: Icons.headset_mic_outlined,
                     title: 'Help & Support',
                     onTap: () {
-                      Navigator.push(context, MaterialPageRoute(builder: (context) => HelpSupportScreen(),));
+                      Navigator.pop(context);
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (context) => const HelpSupportScreen()),
+                      );
                     },
                   ),
                   _buildDrawerItem(
@@ -276,15 +290,22 @@ class _PartnerDashboardView extends StatelessWidget {
                 border: Border(top: BorderSide(color: AppColors.border)),
               ),
               child: InkWell(
-                onTap: () {
+                onTap: () async {
                   Navigator.pop(context);
-                  Navigator.popUntil(context, (route) => route.isFirst);
+                  await SharedPrefHelper.clearSession();
+                  if (context.mounted) {
+                    Navigator.pushAndRemoveUntil(
+                      context,
+                      MaterialPageRoute(builder: (_) => const LoginScreen()),
+                          (route) => false,
+                    );
+                  }
                 },
                 borderRadius: BorderRadius.circular(10),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                child: const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 8, vertical: 8),
                   child: Row(
-                    children: const [
+                    children: [
                       Icon(Icons.logout_rounded, size: 20, color: Color(0xFFDC2626)),
                       SizedBox(width: 12),
                       Text(
@@ -329,66 +350,98 @@ class _PartnerDashboardView extends StatelessWidget {
   // --- Dashboard Tab 0 ---
   Widget _buildDashboardTab(BuildContext context, PartnerDashboardProvider provider) {
     return SafeArea(
-      child: SingleChildScrollView(
-        physics: const BouncingScrollPhysics(),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _buildPartnerHeroCard(context),
-            const SizedBox(height: 14),
-            _buildMetricsGrid(context, provider),
-            const SizedBox(height: 14),
-            _buildTotalEarningsCard(context, provider),
-            const SizedBox(height: 18),
-            _buildQuickActionsRow(context, provider),
-            const SizedBox(height: 22),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text(
-                  'Recent Leads',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w800,
-                    color: AppColors.primary,
-                  ),
-                ),
-                InkWell(
-                  onTap: () => provider.setBottomNavIndex(1),
-                  borderRadius: BorderRadius.circular(6),
-                  child: const Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-                    child: Row(
-                      children: [
-                        Text(
-                          'View All',
-                          style: TextStyle(
-                            fontSize: 12.5,
-                            fontWeight: FontWeight.w700,
-                            color: AppColors.secondary,
-                          ),
-                        ),
-                        SizedBox(width: 4),
-                        Icon(Icons.arrow_forward_rounded, size: 14, color: AppColors.secondary),
-                      ],
+      child: RefreshIndicator(
+        color: AppColors.secondary,
+        onRefresh: provider.loadDashboardData,
+        child: SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _buildPartnerHeroCard(context, provider),
+              const SizedBox(height: 14),
+              _buildMetricsGrid(context, provider),
+              const SizedBox(height: 14),
+              _buildTotalEarningsCard(context, provider),
+              const SizedBox(height: 18),
+              _buildQuickActionsRow(context, provider),
+              const SizedBox(height: 22),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text(
+                    'Recent Leads',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w800,
+                      color: AppColors.primary,
                     ),
                   ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            ...provider.recentLeads.map((lead) => _buildLeadCard(context, lead)),
-            const SizedBox(height: 16),
-          ],
+                  InkWell(
+                    onTap: () => provider.setBottomNavIndex(1),
+                    borderRadius: BorderRadius.circular(6),
+                    child: const Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                      child: Row(
+                        children: [
+                          Text(
+                            'View All',
+                            style: TextStyle(
+                              fontSize: 12.5,
+                              fontWeight: FontWeight.w700,
+                              color: AppColors.secondary,
+                            ),
+                          ),
+                          SizedBox(width: 4),
+                          Icon(Icons.arrow_forward_rounded, size: 14, color: AppColors.secondary),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              if (provider.isLoading)
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 24),
+                  child: Center(
+                    child: CircularProgressIndicator(color: AppColors.secondary),
+                  ),
+                )
+              else if (provider.recentLeads.isEmpty)
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(24),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: AppColors.border),
+                  ),
+                  child: Column(
+                    children: [
+                      Icon(Icons.assignment_outlined, size: 38, color: AppColors.iconSecondary.withValues(alpha: 0.5)),
+                      const SizedBox(height: 8),
+                      const Text(
+                        'No leads submitted yet',
+                        style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.textSecondary),
+                      ),
+                    ],
+                  ),
+                )
+              else
+                ...provider.recentLeads.map((lead) => _buildLeadCard(context, lead)),
+              const SizedBox(height: 16),
+            ],
+          ),
         ),
       ),
     );
   }
 
-  // Hero Card
-  Widget _buildPartnerHeroCard(BuildContext context) {
-    const partnerId = 'MFP00124';
+  // Hero Card with Dynamic Partner ID and Name
+  Widget _buildPartnerHeroCard(BuildContext context, PartnerDashboardProvider provider) {
+    final partnerId = provider.partnerId;
 
     return Container(
       width: double.infinity,
@@ -408,9 +461,11 @@ class _PartnerDashboardView extends StatelessWidget {
                 style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
               ),
               const SizedBox(height: 2),
-              const Text(
-                'Rajesh Kumar!',
-                style: TextStyle(
+              Text(
+                '${provider.partnerName}!',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
                   fontSize: 20,
                   fontWeight: FontWeight.w800,
                   color: AppColors.primary,
@@ -419,11 +474,12 @@ class _PartnerDashboardView extends StatelessWidget {
               const SizedBox(height: 8),
               InkWell(
                 onTap: () {
-                  Clipboard.setData(const ClipboardData(text: partnerId));
+                  Clipboard.setData(ClipboardData(text: partnerId));
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Partner ID copied to clipboard'),
-                      duration: Duration(seconds: 1),
+                    SnackBar(
+                      content: Text('Partner ID "$partnerId" copied to clipboard'),
+                      backgroundColor: AppColors.secondary,
+                      duration: const Duration(seconds: 1),
                     ),
                   );
                 },
@@ -435,19 +491,19 @@ class _PartnerDashboardView extends StatelessWidget {
                     borderRadius: BorderRadius.circular(20),
                     border: Border.all(color: const Color(0xFFA7F3D0)),
                   ),
-                  child: const Row(
+                  child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Text(
                         'Partner ID: $partnerId',
-                        style: TextStyle(
+                        style: const TextStyle(
                           fontSize: 11,
                           fontWeight: FontWeight.w700,
                           color: AppColors.primary,
                         ),
                       ),
-                      SizedBox(width: 6),
-                      Icon(Icons.copy_rounded, size: 12, color: AppColors.secondary),
+                      const SizedBox(width: 6),
+                      const Icon(Icons.copy_rounded, size: 12, color: AppColors.secondary),
                     ],
                   ),
                 ),
@@ -665,7 +721,7 @@ class _PartnerDashboardView extends StatelessWidget {
                 ),
                 const SizedBox(height: 2),
                 const Text(
-                  '↑ +12% vs last month',
+                  '↑ 1.5% commission rate applied',
                   style: TextStyle(
                     fontSize: 10.5,
                     fontWeight: FontWeight.w600,
@@ -716,7 +772,7 @@ class _PartnerDashboardView extends StatelessWidget {
             Navigator.push(
               context,
               MaterialPageRoute(builder: (_) => const AddNewLeadScreen()),
-            );
+            ).then((_) => provider.loadDashboardData());
           },
         ),
         _buildActionTile(
@@ -739,11 +795,12 @@ class _PartnerDashboardView extends StatelessWidget {
           color: const Color(0xFFD97706),
           bg: const Color(0xFFFEF3C7),
           onTap: () {
-            Clipboard.setData(const ClipboardData(text: 'MFP00124'));
+            Clipboard.setData(ClipboardData(text: provider.partnerId));
             ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('Referral code copied: MFP00124'),
-                duration: Duration(seconds: 1),
+              SnackBar(
+                content: Text('Referral code copied: ${provider.partnerId}'),
+                backgroundColor: AppColors.secondary,
+                duration: const Duration(seconds: 1),
               ),
             );
           },

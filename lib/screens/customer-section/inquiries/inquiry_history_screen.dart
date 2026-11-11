@@ -118,31 +118,54 @@ class _InquiryHistoryScreenState extends State<InquiryHistoryScreen> {
                     ),
                     const SizedBox(height: 14),
 
-                    // Inquiries List
+                    // Pull-To-Refresh Inquiries List
                     Expanded(
-                      child: inquiries.isEmpty
+                      child: provider.isLoading
                           ? const Center(
-                        child: Text(
-                          'No inquiries found.',
-                          style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
+                        child: CircularProgressIndicator(
+                          color: AppColors.secondary,
                         ),
                       )
-                          : ListView.builder(
-                        itemCount: inquiries.length,
-                        itemBuilder: (context, index) {
-                          final inquiry = inquiries[index];
-                          return InquiryCard(
-                            inquiry: inquiry,
-                            onTap: () {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) => InquiryDetailsScreen(inquiry: inquiry),
+                          : RefreshIndicator(
+                        color: AppColors.secondary,
+                        onRefresh: () => provider.fetchInquiries(),
+                        child: inquiries.isEmpty
+                            ? ListView(
+                          children: const [
+                            SizedBox(height: 120),
+                            Center(
+                              child: Text(
+                                'No loan inquiries found.\nApply for a loan to track here.',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  color: AppColors.textSecondary,
+                                  fontSize: 13.5,
+                                  height: 1.4,
                                 ),
-                              );
-                            },
-                          );
-                        },
+                              ),
+                            ),
+                          ],
+                        )
+                            : ListView.builder(
+                          physics: const AlwaysScrollableScrollPhysics(),
+                          itemCount: inquiries.length,
+                          itemBuilder: (context, index) {
+                            final inquiry = inquiries[index];
+                            return InquiryCard(
+                              inquiry: inquiry,
+                              onTap: () {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) => InquiryDetailsScreen(
+                                      inquiry: inquiry,
+                                    ),
+                                  ),
+                                );
+                              },
+                            );
+                          },
+                        ),
                       ),
                     ),
                   ],

@@ -204,12 +204,18 @@ class _InquiryStatusScreenState extends State<InquiryStatusScreen> {
   }
 
   // Stepper Header
+// Stepper Header (Fixed generator syntax)
   Widget _buildTrackerStepper() {
     int activeStep = 1;
     if (_currentStage == TrackingStage.documentRequired) activeStep = 2;
     if (_currentStage == TrackingStage.approved) activeStep = 3;
 
-    final steps = ['Submitted\n20 Oct', 'Under Review\n21 Oct', 'Offer Stage\nCurrent', 'Completed\nDisbursal'];
+    final steps = [
+      'Submitted\n20 Oct',
+      'Under Review\n21 Oct',
+      'Offer Stage\nCurrent',
+      'Completed\nDisbursal'
+    ];
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
@@ -279,7 +285,8 @@ class _InquiryStatusScreenState extends State<InquiryStatusScreen> {
                   style: TextStyle(
                     fontSize: 9.5,
                     fontWeight: isCurrent ? FontWeight.w700 : FontWeight.w500,
-                    color: isCurrent ? AppColors.primary : AppColors.textSecondary,
+                    color:
+                    isCurrent ? AppColors.primary : AppColors.textSecondary,
                   ),
                 ),
               ],

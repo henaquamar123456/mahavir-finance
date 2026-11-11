@@ -1,9 +1,14 @@
-
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 
+import '../../../constants/api_urls.dart';
 import '../../../constants/app_colors.dart';
 import '../../../constants/asset_constants.dart';
 import '../../../constants/theme/app_text_styles.dart';
+import '../../../core/servicess/shared_pref_helper.dart';
+import '../../customer-section/home/customer_home_screen.dart';
+import '../../partner_section/dasboard/partner_dashboard_screen.dart';
 import '../login/login_screen.dart';
 
 class SignupScreen extends StatefulWidget {
@@ -22,6 +27,7 @@ class _SignupScreenState extends State<SignupScreen> {
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
 
+  String _selectedRole = 'customer'; // 'customer' ya 'partner'
   bool _passwordVisible = false;
   bool _confirmPasswordVisible = false;
   bool _agreeToTerms = true;
@@ -63,11 +69,11 @@ class _SignupScreenState extends State<SignupScreen> {
       ),
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(13),
-        borderSide: BorderSide(color: AppColors.border),
+        borderSide: const BorderSide(color: AppColors.border),
       ),
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(13),
-        borderSide: BorderSide(color: AppColors.border),
+        borderSide: const BorderSide(color: AppColors.border),
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(13),
@@ -132,9 +138,7 @@ class _SignupScreenState extends State<SignupScreen> {
     return IconButton(
       onPressed: onPressed,
       icon: Icon(
-        visible
-            ? Icons.visibility_outlined
-            : Icons.visibility_off_outlined,
+        visible ? Icons.visibility_outlined : Icons.visibility_off_outlined,
         color: AppColors.iconSecondary,
         size: 21,
       ),
@@ -164,20 +168,94 @@ class _SignupScreenState extends State<SignupScreen> {
     setState(() => _isLoading = true);
 
     try {
-      // TODO: Connect Signup API / Firebase Authentication here.
-      // Account is not created until the backend confirms success.
+      final Map<String, dynamic> requestBody = {
+        'name': _nameController.text.trim(),
+        'email': _emailController.text.trim().toLowerCase(),
+        'phone': _mobileController.text.trim(),
+        'password': _passwordController.text,
+        'role': _selectedRole, // Dynamic role: 'customer' ya 'partner'
+      };
 
-      await Future<void>.delayed(
-        const Duration(milliseconds: 300),
-      );
+      final response = await http
+          .post(
+        Uri.parse(MFUrls.signup),
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        },
+        body: jsonEncode(requestBody),
+      )
+          .timeout(const Duration(seconds: 15));
+
+      final Map<String, dynamic> responseData = jsonDecode(response.body);
 
       if (!mounted) return;
 
+      if (response.statusCode == 201 && responseData['success'] == true) {
+        final String? token = responseData['token'];
+        final dynamic rawUser = responseData['data'] ?? responseData['user'];
+
+        final Map<String, dynamic> userData =
+        rawUser != null ? Map<String, dynamic>.from(rawUser) : {};
+
+        if (token != null) {
+          await SharedPrefHelper.saveUserSession(
+            token: token,
+            userData: userData,
+          );
+        }
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            backgroundColor: AppColors.primary,
+            content: Text(
+              responseData['message'] ?? 'Account created successfully!',
+              style: AppTextStyles.bodyMedium.copyWith(
+                color: AppColors.textOnPrimary,
+              ),
+            ),
+          ),
+        );
+
+        // Role based navigation:
+        if (_selectedRole == 'partner') {
+          Navigator.pushAndRemoveUntil(
+            context,
+            MaterialPageRoute(
+              builder: (_) => const PartnerDashboardScreen(),
+            ),
+                (route) => false,
+          );
+        } else {
+          Navigator.pushAndRemoveUntil(
+            context,
+            MaterialPageRoute(
+              builder: (_) => const HomeScreen(),
+            ),
+                (route) => false,
+          );
+        }
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            backgroundColor: AppColors.error,
+            content: Text(
+              responseData['message'] ??
+                  'Registration failed. Please try again.',
+              style: AppTextStyles.bodyMedium.copyWith(
+                color: AppColors.textOnPrimary,
+              ),
+            ),
+          ),
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          backgroundColor: AppColors.primary,
+          backgroundColor: AppColors.error,
           content: Text(
-            'Form validated. Connect your registration API.',
+            'Connection error: Unable to reach server. Please check internet/IP.',
             style: AppTextStyles.bodyMedium.copyWith(
               color: AppColors.textOnPrimary,
             ),
@@ -202,7 +280,7 @@ class _SignupScreenState extends State<SignupScreen> {
               padding: const EdgeInsets.fromLTRB(20, 8, 20, 22),
               child: ConstrainedBox(
                 constraints: BoxConstraints(
-                  minHeight: constraints.maxHeight - 30,
+                  minHeight: constraints.maxHeight - 30, // Syntax error fixed
                 ),
                 child: Form(
                   key: _formKey,
@@ -213,8 +291,7 @@ class _SignupScreenState extends State<SignupScreen> {
                       Row(
                         children: [
                           IconButton(
-                            onPressed: () =>
-                                Navigator.maybePop(context),
+                            onPressed: () => Navigator.maybePop(context),
                             icon: const Icon(
                               Icons.arrow_back,
                               color: AppColors.primary,
@@ -254,25 +331,23 @@ class _SignupScreenState extends State<SignupScreen> {
 
                       const SizedBox(height: 10),
 
-                      // Logo
                       Center(
                         child: Image.asset(
                           AssetsConstants.mahavirLogo,
-                          height: 105,
-                          width: 190,
+                          height: 95,
+                          width: 170,
                           fit: BoxFit.contain,
                         ),
                       ),
 
                       const SizedBox(height: 6),
 
-                      // Heading
                       Text(
                         'Create Your Account',
                         textAlign: TextAlign.center,
                         style: AppTextStyles.displayMedium.copyWith(
                           color: AppColors.primary,
-                          fontSize: 27,
+                          fontSize: 26,
                           fontWeight: FontWeight.bold,
                           letterSpacing: -0.8,
                         ),
@@ -281,26 +356,59 @@ class _SignupScreenState extends State<SignupScreen> {
                       const SizedBox(height: 5),
 
                       Text(
-                        'Join Mahavir Finance and take the first step\n'
-                            'towards your financial goals',
+                        _selectedRole == 'partner'
+                            ? 'Register as DSA Partner to refer clients\nand earn handsome commissions'
+                            : 'Join Mahavir Finance and take the first step\ntowards your financial goals',
                         textAlign: TextAlign.center,
                         style: AppTextStyles.bodyMedium.copyWith(
                           color: AppColors.textSecondary,
-                          fontSize: 15,
-                          height: 1.45,
+                          fontSize: 14,
+                          height: 1.4,
                         ),
                       ),
 
-                      const SizedBox(height: 22),
+                      const SizedBox(height: 18),
+
+                      // Customer / Partner Role Selector
+                      Container(
+                        padding: const EdgeInsets.all(4),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF1F5F9),
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(color: AppColors.border),
+                        ),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: _buildRoleSelectorTab(
+                                icon: Icons.person_rounded,
+                                title: 'Customer',
+                                isSelected: _selectedRole == 'customer',
+                                onTap: () => setState(() => _selectedRole = 'customer'),
+                              ),
+                            ),
+                            Expanded(
+                              child: _buildRoleSelectorTab(
+                                icon: Icons.handshake_rounded,
+                                title: 'Partner (DSA)',
+                                isSelected: _selectedRole == 'partner',
+                                onTap: () => setState(() => _selectedRole = 'partner'),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+
+                      const SizedBox(height: 18),
 
                       // Full Name
                       _buildField(
                         controller: _nameController,
-                        hint: 'Full Name',
+                        hint: _selectedRole == 'partner' ? 'Full Name / Agency Name' : 'Full Name',
                         icon: Icons.person_outline,
                         validator: (value) {
                           if (value == null || value.trim().isEmpty) {
-                            return 'Please enter your full name';
+                            return 'Please enter your name';
                           }
                           if (value.trim().length < 2) {
                             return 'Enter a valid name';
@@ -322,8 +430,7 @@ class _SignupScreenState extends State<SignupScreen> {
                           if (value == null || value.trim().isEmpty) {
                             return 'Please enter mobile number';
                           }
-                          if (!RegExp(r'^[6-9]\d{9}$')
-                              .hasMatch(value.trim())) {
+                          if (!RegExp(r'^[6-9]\d{9}$').hasMatch(value.trim())) {
                             return 'Enter a valid 10-digit mobile number';
                           }
                           return null;
@@ -437,8 +544,7 @@ class _SignupScreenState extends State<SignupScreen> {
                           const SizedBox(width: 7),
                           Expanded(
                             child: Wrap(
-                              crossAxisAlignment:
-                              WrapCrossAlignment.center,
+                              crossAxisAlignment: WrapCrossAlignment.center,
                               children: [
                                 Text(
                                   'I agree to the ',
@@ -447,9 +553,7 @@ class _SignupScreenState extends State<SignupScreen> {
                                   ),
                                 ),
                                 GestureDetector(
-                                  onTap: () {
-                                    // TODO: Open Terms & Conditions.
-                                  },
+                                  onTap: () {},
                                   child: Text(
                                     'Terms & Conditions',
                                     style: AppTextStyles.bodySmall.copyWith(
@@ -466,9 +570,7 @@ class _SignupScreenState extends State<SignupScreen> {
                                   ),
                                 ),
                                 GestureDetector(
-                                  onTap: () {
-                                    // TODO: Open Privacy Policy.
-                                  },
+                                  onTap: () {},
                                   child: Text(
                                     'Privacy Policy',
                                     style: AppTextStyles.bodySmall.copyWith(
@@ -486,19 +588,15 @@ class _SignupScreenState extends State<SignupScreen> {
 
                       const SizedBox(height: 18),
 
-                      // Create Account button
+                      // Create Account Button
                       SizedBox(
-                        height: 56,
+                        height: 54,
                         child: ElevatedButton(
-                          onPressed:
-                          _isLoading ? null : _createAccount,
+                          onPressed: _isLoading ? null : _createAccount,
                           style: ElevatedButton.styleFrom(
                             backgroundColor: AppColors.buttonPrimary,
                             foregroundColor: AppColors.textOnPrimary,
-                            disabledBackgroundColor:
-                            AppColors.buttonDisabled,
-                            disabledForegroundColor:
-                            AppColors.textOnPrimary,
+                            disabledBackgroundColor: AppColors.buttonDisabled,
                             elevation: 0,
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(30),
@@ -517,7 +615,9 @@ class _SignupScreenState extends State<SignupScreen> {
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
                               Text(
-                                'Create Account',
+                                _selectedRole == 'partner'
+                                    ? 'Register as Partner'
+                                    : 'Create Customer Account',
                                 style: AppTextStyles.button.copyWith(
                                   color: AppColors.textOnPrimary,
                                 ),
@@ -525,78 +625,8 @@ class _SignupScreenState extends State<SignupScreen> {
                               const SizedBox(width: 12),
                               const Icon(
                                 Icons.arrow_forward,
-                                size: 23,
+                                size: 22,
                                 color: AppColors.textOnPrimary,
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-
-                      const SizedBox(height: 22),
-
-                      // OR divider
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Divider(
-                              color: AppColors.divider,
-                              thickness: 1,
-                            ),
-                          ),
-                          Padding(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 14,
-                            ),
-                            child: Text(
-                              'OR',
-                              style: AppTextStyles.labelMedium.copyWith(
-                                color: AppColors.textSecondary,
-                              ),
-                            ),
-                          ),
-                          Expanded(
-                            child: Divider(
-                              color: AppColors.divider,
-                              thickness: 1,
-                            ),
-                          ),
-                        ],
-                      ),
-
-                      const SizedBox(height: 20),
-
-                      // Register as Partner
-                      SizedBox(
-                        height: 56,
-                        child: OutlinedButton(
-                          onPressed: () {
-                            // TODO: Navigate to Partner Registration.
-                          },
-                          style: OutlinedButton.styleFrom(
-                            foregroundColor: AppColors.primary,
-                            side: const BorderSide(
-                              color: AppColors.primary,
-                              width: 1.3,
-                            ),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(30),
-                            ),
-                          ),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              const Icon(
-                                Icons.handshake_outlined,
-                                size: 25,
-                                color: AppColors.iconPrimary,
-                              ),
-                              const SizedBox(width: 12),
-                              Text(
-                                'Register as Partner',
-                                style: AppTextStyles.button.copyWith(
-                                  color: AppColors.primary,
-                                ),
                               ),
                             ],
                           ),
@@ -608,6 +638,45 @@ class _SignupScreenState extends State<SignupScreen> {
               ),
             );
           },
+        ),
+      ),
+    );
+  }
+
+  Widget _buildRoleSelectorTab({
+    required IconData icon,
+    required String title,
+    required bool isSelected,
+    required VoidCallback onTap,
+  }) {
+    return Material(
+      color: isSelected ? AppColors.primary : Colors.transparent,
+      borderRadius: BorderRadius.circular(10),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(10),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 10),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                icon,
+                size: 18,
+                color: isSelected ? Colors.white : AppColors.textSecondary,
+              ),
+              const SizedBox(width: 8),
+              Text(
+                title,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                  color: isSelected ? Colors.white : AppColors.textSecondary,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

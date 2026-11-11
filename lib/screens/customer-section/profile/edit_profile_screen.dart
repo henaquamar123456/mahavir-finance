@@ -6,27 +6,52 @@ import '../../../../constants/asset_constants.dart';
 import '../../../../utils/date_formatter.dart';
 import 'profile_provider.dart';
 
-class EditProfileScreen extends StatefulWidget {
+class EditProfileScreen extends StatelessWidget {
   const EditProfileScreen({super.key});
 
   @override
-  State<EditProfileScreen> createState() => _EditProfileScreenState();
+  Widget build(BuildContext context) {
+    return ChangeNotifierProvider(
+      create: (_) => ProfileProvider(),
+      child: const _EditProfileView(),
+    );
+  }
 }
 
-class _EditProfileScreenState extends State<EditProfileScreen> {
+class _EditProfileView extends StatefulWidget {
+  const _EditProfileView();
+
+  @override
+  State<_EditProfileView> createState() => _EditProfileViewState();
+}
+
+class _EditProfileViewState extends State<_EditProfileView> {
   late TextEditingController _nameController;
   late TextEditingController _cityController;
   late DateTime _selectedDob;
   late String _selectedGender;
+  bool _initialized = false;
 
   @override
   void initState() {
     super.initState();
-    final p = context.read<ProfileProvider>();
-    _nameController = TextEditingController(text: p.fullName);
-    _cityController = TextEditingController(text: p.city);
-    _selectedDob = p.dob;
-    _selectedGender = p.gender;
+    _nameController = TextEditingController();
+    _cityController = TextEditingController();
+    _selectedDob = DateTime(1996, 3, 15);
+    _selectedGender = 'Male';
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (!_initialized) {
+      final p = context.read<ProfileProvider>();
+      _nameController.text = p.fullName;
+      _cityController.text = p.city;
+      _selectedDob = p.dob;
+      _selectedGender = p.gender;
+      _initialized = true;
+    }
   }
 
   @override
@@ -39,6 +64,13 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   @override
   Widget build(BuildContext context) {
     final provider = context.watch<ProfileProvider>();
+
+    if (_nameController.text.isEmpty && provider.fullName.isNotEmpty) {
+      _nameController.text = provider.fullName;
+    }
+    if (_cityController.text.isEmpty && provider.city.isNotEmpty) {
+      _cityController.text = provider.city;
+    }
 
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
@@ -67,7 +99,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // 1. Profile Picture with change badge
+                    // Profile Photo
                     Center(
                       child: Column(
                         children: [
@@ -113,23 +145,23 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                     ),
                     const SizedBox(height: 20),
 
-                    // 2. Personal Information Fields
+                    // Full Name
                     _buildLabel('Full Name*'),
                     _buildInputField(controller: _nameController, hint: 'Enter your full name'),
                     const SizedBox(height: 14),
 
-                    // Verified Email Box (With Change Button)
+                    // Email Address
                     _buildLabel('Email Address*'),
                     _buildVerifiedField(
-                      value: provider.email,
+                      value: provider.email.isNotEmpty ? provider.email : 'No email set',
                       onTapChange: () => _showChangeEmailModal(context, provider),
                     ),
                     const SizedBox(height: 14),
 
-                    // Verified Mobile Number (With Change Button)
+                    // Mobile Number
                     _buildLabel('Mobile Number*'),
                     _buildVerifiedField(
-                      value: '+91 ${provider.mobileNumber}',
+                      value: provider.mobileNumber.isNotEmpty ? '+91 ${provider.mobileNumber}' : 'No phone set',
                       onTapChange: () => _showChangeMobileModal(context, provider),
                     ),
                     const SizedBox(height: 14),
@@ -219,27 +251,51 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                 width: double.infinity,
                 height: 48,
                 child: ElevatedButton(
-                  onPressed: () {
-                    provider.updateBasicDetails(
+                  onPressed: provider.isLoading
+                      ? null
+                      : () async {
+                    final success = await provider.saveProfileChanges(
                       name: _nameController.text.trim(),
                       dob: _selectedDob,
                       gender: _selectedGender,
                       city: _cityController.text.trim(),
                     );
-                    Navigator.pop(context);
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Profile updated successfully!'),
-                        backgroundColor: AppColors.secondary,
-                      ),
-                    );
+
+                    if (!context.mounted) return;
+
+                    if (success) {
+                      Navigator.pop(context);
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Profile updated successfully!'),
+                          backgroundColor: AppColors.secondary,
+                        ),
+                      );
+                    } else {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Failed to update profile. Try again.'),
+                          backgroundColor: AppColors.error,
+                        ),
+                      );
+                    }
                   },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.secondary,
+                    disabledBackgroundColor: AppColors.secondary.withValues(alpha: 0.6),
                     elevation: 0,
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                   ),
-                  child: const Text(
+                  child: provider.isLoading
+                      ? const SizedBox(
+                    height: 20,
+                    width: 20,
+                    child: CircularProgressIndicator(
+                      color: Colors.white,
+                      strokeWidth: 2,
+                    ),
+                  )
+                      : const Text(
                     'Save Changes',
                     style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: Colors.white),
                   ),
@@ -317,7 +373,6 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     );
   }
 
-  // PDF Page 22: Change Email Bottom Sheet with OTP
   void _showChangeEmailModal(BuildContext context, ProfileProvider provider) {
     final emailController = TextEditingController();
     showModalBottomSheet(
@@ -338,7 +393,6 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     );
   }
 
-  // PDF Page 22: Change Mobile Bottom Sheet with OTP
   void _showChangeMobileModal(BuildContext context, ProfileProvider provider) {
     final mobileController = TextEditingController();
     showModalBottomSheet(
@@ -362,7 +416,6 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   }
 }
 
-// Reusable 6-Digit OTP Verification Sheet
 class _OtpVerificationSheet extends StatefulWidget {
   final String title;
   final String subtitle;

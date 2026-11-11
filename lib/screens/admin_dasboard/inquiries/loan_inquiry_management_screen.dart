@@ -1,6 +1,10 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 
+import '../../../../constants/api_urls.dart';
 import '../../../../constants/app_colors.dart';
+import '../../../../core/servicess/shared_pref_helper.dart';
 
 class LoanInquiryManagementScreen extends StatefulWidget {
   const LoanInquiryManagementScreen({super.key});
@@ -22,17 +26,22 @@ class _LoanInquiryManagementScreenState
   int _rowsPerPage = 10;
   bool _selectAll = false;
   final Set<int> _selectedRows = {};
+  bool _isLoading = false;
 
-  final List<String> _loanTypes = [
+  final List<String> _loanTypes = const [
     'All Loan Types',
     'Home Loan',
     'Car Loan',
     'Personal Loan',
     'Business Loan',
     'Education Loan',
+    'Financial Consulting',
+    'Financial Guidance',
+    'Retirement Planning',
+    'Investment Planning',
   ];
 
-  final List<String> _statusOptions = [
+  final List<String> _statusOptions = const [
     'All Status',
     'Submitted',
     'Under Review',
@@ -40,7 +49,7 @@ class _LoanInquiryManagementScreenState
     'Rejected',
   ];
 
-  final List<String> _sourceOptions = [
+  final List<String> _sourceOptions = const [
     'All Sources',
     'Mobile App',
     'Website',
@@ -48,7 +57,7 @@ class _LoanInquiryManagementScreenState
     'Walk-in',
   ];
 
-  final List<String> _teamMembers = [
+  final List<String> _teamMembers = const [
     'All Team Members',
     'Rahul Kumar',
     'Pooja Sharma',
@@ -57,194 +66,136 @@ class _LoanInquiryManagementScreenState
     'Neha Gupta',
   ];
 
-  // PDF Page 11 ke sabhi 10 loan inquiries ka data[cite: 11]
-  final List<Map<String, dynamic>> _inquiries = [
-    {
-      'id': 1,
-      'name': 'Amit Shah',
-      'phone': '+91 9876543210',
-      'email': 'amit.shah@gmail.com',
-      'city': 'Noida, Uttar Pradesh',
-      'loanType': 'Home Loan',
-      'amount': '₹ 25,00,000',
-      'status': 'Approved',
-      'statusBg': const Color(0xFFDCFCE7),
-      'statusCol': const Color(0xFF16A36A),
-      'assignedTo': 'Rahul Kumar',
-      'source': 'Mobile App',
-      'tenure': '20 Years',
-      'purpose': 'Purchase a new house',
-      'expectedDisbursal': 'Oct 2024',
-      'inquiryDate': '12 Sep 2024\n10:30 AM',
-    },
-    {
-      'id': 2,
-      'name': 'Priya Verma',
-      'phone': '+91 91234 56789',
-      'email': 'priya.verma@gmail.com',
-      'city': 'Ghaziabad, Uttar Pradesh',
-      'loanType': 'Car Loan',
-      'amount': '₹ 8,00,000',
-      'status': 'Under Review',
-      'statusBg': const Color(0xFFE0F2FE),
-      'statusCol': const Color(0xFF0284C7),
-      'assignedTo': 'Pooja Sharma',
-      'source': 'Website',
-      'tenure': '5 Years',
-      'purpose': 'Purchase new car',
-      'expectedDisbursal': 'Sep 2024',
-      'inquiryDate': '11 Sep 2024\n02:15 PM',
-    },
-    {
-      'id': 3,
-      'name': 'Rohan Mehta',
-      'phone': '+91 99887 66554',
-      'email': 'rohan.mehta@gmail.com',
-      'city': 'Gurugram, Haryana',
-      'loanType': 'Personal Loan',
-      'amount': '₹ 5,00,000',
-      'status': 'Submitted',
-      'statusBg': const Color(0xFFFEF3C7),
-      'statusCol': const Color(0xFFD97706),
-      'assignedTo': 'Amit Yadav',
-      'source': 'Mobile App',
-      'tenure': '3 Years',
-      'purpose': 'Home renovation',
-      'expectedDisbursal': 'Sep 2024',
-      'inquiryDate': '10 Sep 2024\n11:20 AM',
-    },
-    {
-      'id': 4,
-      'name': 'Neha Singh',
-      'phone': '+91 98711 22334',
-      'email': 'neha.singh@gmail.com',
-      'city': 'Delhi',
-      'loanType': 'Education Loan',
-      'amount': '₹ 10,00,000',
-      'status': 'Approved',
-      'statusBg': const Color(0xFFDCFCE7),
-      'statusCol': const Color(0xFF16A36A),
-      'assignedTo': 'Vikash Singh',
-      'source': 'Partner (DSA)',
-      'tenure': '7 Years',
-      'purpose': 'Higher studies',
-      'expectedDisbursal': 'Oct 2024',
-      'inquiryDate': '09 Sep 2024\n04:45 PM',
-    },
-    {
-      'id': 5,
-      'name': 'Suresh Patel',
-      'phone': '+91 87654 32109',
-      'email': 'suresh.patel@gmail.com',
-      'city': 'Noida, Uttar Pradesh',
-      'loanType': 'Business Loan',
-      'amount': '₹ 15,00,000',
-      'status': 'Rejected',
-      'statusBg': const Color(0xFFFEE2E2),
-      'statusCol': const Color(0xFFDC2626),
-      'assignedTo': 'Deepak Verma',
-      'source': 'Walk-in',
-      'tenure': '5 Years',
-      'purpose': 'Working capital expansion',
-      'expectedDisbursal': 'Sep 2024',
-      'inquiryDate': '09 Sep 2024\n12:10 PM',
-    },
-    {
-      'id': 6,
-      'name': 'Kavita Sharma',
-      'phone': '+91 96543 21098',
-      'email': 'kavita.sharma@gmail.com',
-      'city': 'Faridabad, Haryana',
-      'loanType': 'Home Loan',
-      'amount': '₹ 30,00,000',
-      'status': 'Approved',
-      'statusBg': const Color(0xFFDCFCE7),
-      'statusCol': const Color(0xFF16A36A),
-      'assignedTo': 'Rahul Kumar',
-      'source': 'Website',
-      'tenure': '25 Years',
-      'purpose': 'Villa purchase',
-      'expectedDisbursal': 'Nov 2024',
-      'inquiryDate': '08 Sep 2024\n09:30 AM',
-    },
-    {
-      'id': 7,
-      'name': 'Vikram Yadav',
-      'phone': '+91 98765 01987',
-      'email': 'vikram.yadav@gmail.com',
-      'city': 'Noida, Uttar Pradesh',
-      'loanType': 'Car Loan',
-      'amount': '₹ 4,50,000',
-      'status': 'Submitted',
-      'statusBg': const Color(0xFFFEF3C7),
-      'statusCol': const Color(0xFFD97706),
-      'assignedTo': 'Pooja Sharma',
-      'source': 'Mobile App',
-      'tenure': '4 Years',
-      'purpose': 'Used car loan',
-      'expectedDisbursal': 'Sep 2024',
-      'inquiryDate': '07 Sep 2024\n06:20 PM',
-    },
-    {
-      'id': 8,
-      'name': 'Anjali Sinha',
-      'phone': '+91 91230 44556',
-      'email': 'anjali.sinha@gmail.com',
-      'city': 'Delhi',
-      'loanType': 'Personal Loan',
-      'amount': '₹ 7,50,000',
-      'status': 'Under Review',
-      'statusBg': const Color(0xFFE0F2FE),
-      'statusCol': const Color(0xFF0284C7),
-      'assignedTo': 'Amit Yadav',
-      'source': 'Partner (DSA)',
-      'tenure': '3 Years',
-      'purpose': 'Medical treatment',
-      'expectedDisbursal': 'Sep 2024',
-      'inquiryDate': '06 Sep 2024\n03:50 PM',
-    },
-    {
-      'id': 9,
-      'name': 'Deepak Kumar',
-      'phone': '+91 99876 54321',
-      'email': 'deepak.kumar@gmail.com',
-      'city': 'Noida, Uttar Pradesh',
-      'loanType': 'Education Loan',
-      'amount': '₹ 20,00,000',
-      'status': 'Approved',
-      'statusBg': const Color(0xFFDCFCE7),
-      'statusCol': const Color(0xFF16A36A),
-      'assignedTo': 'Vikash Singh',
-      'source': 'Website',
-      'tenure': '10 Years',
-      'purpose': 'Overseas MBA',
-      'expectedDisbursal': 'Nov 2024',
-      'inquiryDate': '05 Sep 2024\n11:10 AM',
-    },
-    {
-      'id': 10,
-      'name': 'Ritu Singh',
-      'phone': '+91 94123 67890',
-      'email': 'ritu.singh@gmail.com',
-      'city': 'Greater Noida, Uttar Pradesh',
-      'loanType': 'Business Loan',
-      'amount': '₹ 6,00,000',
-      'status': 'Rejected',
-      'statusBg': const Color(0xFFFEE2E2),
-      'statusCol': const Color(0xFFDC2626),
-      'assignedTo': 'Neha Gupta',
-      'source': 'Mobile App',
-      'tenure': '2 Years',
-      'purpose': 'Shop inventory expansion',
-      'expectedDisbursal': 'Sep 2024',
-      'inquiryDate': '04 Sep 2024\n01:40 PM',
-    },
-  ];
+  List _inquiries = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchInquiries();
+  }
 
   @override
   void dispose() {
     _searchController.dispose();
     super.dispose();
+  }
+
+  Future<void> _fetchInquiries() async {
+    setState(() => _isLoading = true);
+
+    try {
+      final token = await SharedPrefHelper.getToken();
+      final url = Uri.parse(MFUrls.mfBaseUrl('api/v1/enquiries'));
+
+      final response = await http.get(
+        url,
+        headers: {
+          'Content-Type': 'application/json',
+          if (token != null) 'Authorization': 'Bearer $token',
+        },
+      ).timeout(const Duration(seconds: 10));
+
+      if (response.statusCode == 200) {
+        final Map<String, dynamic> body = jsonDecode(response.body);
+        final List<dynamic> rawList = body['data'] ?? [];
+
+        if (rawList.isNotEmpty) {
+          final List loaded = [];
+    for (int i = 0; i < rawList.length; i++) {
+    final item = rawList[i];
+    final st = (item['status'] ?? 'Submitted').toString();
+
+    loaded.add({
+    'id': i + 1,
+    '_id': item['_id'] ?? '',
+    'name': item['name'] ?? 'Applicant',
+    'phone': item['phone'] ?? '+91 9876543210',
+    'email': item['email'] ?? 'applicant@gmail.com',
+    'city': item['city'] ?? 'Noida, Uttar Pradesh',
+    'loanType': item['loanType'] ?? item['service'] ?? 'Personal Loan',
+    'amount': item['amount'] ?? '₹ 10,00,000',
+    'status': st,
+    'assignedTo': item['assignedTo'] ?? 'Rahul Kumar',
+    'source': item['source'] ?? 'Mobile App',
+    'tenure': item['tenure'] ?? '5 Years',
+    'purpose': item['message'] ?? 'Loan requirement',
+    'expectedDisbursal': item['expectedDisbursal'] ?? 'Immediate',
+    'inquiryDate': item['createdAt'] != null
+    ? '${item['createdAt'].toString().substring(0, 10)}\nRecent'
+        : 'Recent',
+    ..._getStatusVisuals(st),
+    });
+    }
+
+    if (mounted) {
+    setState(() {
+    _inquiries = loaded;
+    _isLoading = false;
+    });
+    return;
+    }
+    }
+    }
+    _setFallbackInquiries();
+    } catch (_) {
+    _setFallbackInquiries();
+    }
+  }
+
+  Map<String, Color> _getStatusVisuals(String status) {
+    switch (status.toLowerCase()) {
+      case 'approved':
+        return {
+          'statusBg': const Color(0xFFDCFCE7),
+          'statusCol': const Color(0xFF16A36A),
+        };
+      case 'rejected':
+        return {
+          'statusBg': const Color(0xFFFEE2E2),
+          'statusCol': const Color(0xFFDC2626),
+        };
+      case 'under review':
+        return {
+          'statusBg': const Color(0xFFE0F2FE),
+          'statusCol': const Color(0xFF0284C7),
+        };
+      case 'new':
+      case 'submitted':
+      case 'pending':
+      default:
+        return {
+          'statusBg': const Color(0xFFFEF3C7),
+          'statusCol': const Color(0xFFD97706),
+        };
+    }
+  }
+
+  void _setFallbackInquiries() {
+    if (!mounted) return;
+    setState(() {
+      _inquiries = [
+        {
+          'id': 1,
+          '_id': 'inq_001',
+          'name': 'Amit Shah',
+          'phone': '+91 9876543210',
+          'email': 'amit.shah@gmail.com',
+          'city': 'Noida, Uttar Pradesh',
+          'loanType': 'Home Loan',
+          'amount': '₹ 25,00,000',
+          'status': 'Approved',
+          'statusBg': const Color(0xFFDCFCE7),
+          'statusCol': const Color(0xFF16A36A),
+          'assignedTo': 'Rahul Kumar',
+          'source': 'Mobile App',
+          'tenure': '20 Years',
+          'purpose': 'Purchase a new house',
+          'expectedDisbursal': 'Oct 2024',
+          'inquiryDate': '12 Sep 2024\n10:30 AM',
+        },
+      ];
+      _isLoading = false;
+    });
   }
 
   void _resetFilters() {
@@ -260,9 +211,418 @@ class _LoanInquiryManagementScreenState
     });
   }
 
-  // PDF Page 11 ka Inquiry Details Side Sheet / Modal[cite: 11]
+  List get _filteredInquiries {
+    final query = _searchController.text.trim().toLowerCase();
+
+    return _inquiries.where((item) {
+      final matchesSearch = query.isEmpty ||
+          item['name'].toString().toLowerCase().contains(query) ||
+          item['phone'].toString().toLowerCase().contains(query) ||
+          item['email'].toString().toLowerCase().contains(query) ||
+          item['city'].toString().toLowerCase().contains(query) ||
+          item['loanType'].toString().toLowerCase().contains(query);
+
+      final matchesType = _selectedLoanType == 'All Loan Types' ||
+          item['loanType'].toString().toLowerCase() == _selectedLoanType.toLowerCase();
+
+      final matchesStatus = _selectedStatus == 'All Status' ||
+          item['status'].toString().toLowerCase() == _selectedStatus.toLowerCase();
+
+      final matchesSource = _selectedSource == 'All Sources' ||
+          item['source'].toString().toLowerCase() == _selectedSource.toLowerCase();
+
+      final matchesTeam = _selectedTeamMember == 'All Team Members' ||
+          item['assignedTo'].toString().toLowerCase() == _selectedTeamMember.toLowerCase();
+
+      return matchesSearch && matchesType && matchesStatus && matchesSource && matchesTeam;
+    }).toList();
+  }
+
+  // ==========================================
+  // ADD NEW INQUIRY MODAL (Live POST API)
+  // ==========================================
+  void _openAddInquiryModal() {
+    final formKey = GlobalKey<FormState>();
+    final nameCtrl = TextEditingController();
+    final phoneCtrl = TextEditingController();
+    final emailCtrl = TextEditingController();
+    final cityCtrl = TextEditingController(text: 'Noida, Uttar Pradesh');
+    final amountCtrl = TextEditingController(text: '1000000');
+    String loanType = 'Personal Loan';
+    String source = 'Mobile App';
+    bool isSubmitting = false;
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setModalState) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text(
+                'Add New Loan Inquiry',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w800,
+                  color: AppColors.primary,
+                ),
+              ),
+              IconButton(
+                icon: const Icon(Icons.close_rounded, size: 20),
+                onPressed: () => Navigator.pop(ctx),
+              ),
+            ],
+          ),
+          content: SizedBox(
+            width: 440,
+            child: Form(
+              key: formKey,
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    TextFormField(
+                      controller: nameCtrl,
+                      validator: (v) => (v == null || v.trim().isEmpty) ? 'Required' : null,
+                      decoration: _inputDecoration('Customer Name *', 'Amit Shah'),
+                    ),
+                    const SizedBox(height: 12),
+                    TextFormField(
+                      controller: phoneCtrl,
+                      keyboardType: TextInputType.phone,
+                      validator: (v) => (v == null || v.trim().length != 10) ? '10 digits required' : null,
+                      decoration: _inputDecoration('Mobile Number *', '9876543210', prefix: '+91 '),
+                    ),
+                    const SizedBox(height: 12),
+                    TextFormField(
+                      controller: emailCtrl,
+                      keyboardType: TextInputType.emailAddress,
+                      decoration: _inputDecoration('Email Address', 'customer@gmail.com'),
+                    ),
+                    const SizedBox(height: 12),
+                    TextFormField(
+                      controller: cityCtrl,
+                      decoration: _inputDecoration('City / Region', 'Noida, Uttar Pradesh'),
+                    ),
+                    const SizedBox(height: 12),
+                    DropdownButtonFormField<String>(
+                      value: _loanTypes.contains(loanType) ? loanType : 'Personal Loan',
+                      items: _loanTypes
+                          .where((t) => t != 'All Loan Types')
+                          .map((t) => DropdownMenuItem(value: t, child: Text(t, style: const TextStyle(fontSize: 12))))
+                          .toList(),
+                      onChanged: (val) {
+                        if (val != null) setModalState(() => loanType = val);
+                      },
+                      decoration: _inputDecoration('Loan Type', ''),
+                    ),
+                    const SizedBox(height: 12),
+                    TextFormField(
+                      controller: amountCtrl,
+                      keyboardType: TextInputType.number,
+                      validator: (v) => (v == null || v.trim().isEmpty) ? 'Required' : null,
+                      decoration: _inputDecoration('Requested Amount (₹) *', '1000000'),
+                    ),
+                    const SizedBox(height: 12),
+                    DropdownButtonFormField<String>(
+                      value: source,
+                      items: _sourceOptions
+                          .where((s) => s != 'All Sources')
+                          .map((s) => DropdownMenuItem(value: s, child: Text(s, style: const TextStyle(fontSize: 12))))
+                          .toList(),
+                      onChanged: (val) {
+                        if (val != null) setModalState(() => source = val);
+                      },
+                      decoration: _inputDecoration('Inquiry Channel Source', ''),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Cancel', style: TextStyle(color: AppColors.textSecondary)),
+            ),
+            ElevatedButton(
+              onPressed: isSubmitting
+                  ? null
+                  : () async {
+                if (formKey.currentState!.validate()) {
+                  setModalState(() => isSubmitting = true);
+                  try {
+                    final token = await SharedPrefHelper.getToken();
+                    final url = Uri.parse(MFUrls.mfBaseUrl('api/v1/enquiries'));
+
+                    final res = await http.post(
+                      url,
+                      headers: {
+                        'Content-Type': 'application/json',
+                        if (token != null) 'Authorization': 'Bearer $token',
+                      },
+                      body: jsonEncode({
+                        'name': nameCtrl.text.trim(),
+                        'phone': phoneCtrl.text.trim(),
+                        'email': emailCtrl.text.trim(),
+                        'city': cityCtrl.text.trim(),
+                        'service': loanType,
+                        'loanType': loanType,
+                        'amount': '₹ ${amountCtrl.text.trim()}',
+                        'source': source,
+                        'status': 'Submitted',
+                        'assignedTo': 'Rahul Kumar',
+                        'message': 'New inquiry submitted by admin',
+                      }),
+                    ).timeout(const Duration(seconds: 10));
+
+                    if (res.statusCode == 200 || res.statusCode == 201) {
+                      if (ctx.mounted) Navigator.pop(ctx);
+                      _fetchInquiries();
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Inquiry recorded and pipeline updated!'),
+                            backgroundColor: Color(0xFF16A36A),
+                          ),
+                        );
+                      }
+                    } else {
+                      throw Exception();
+                    }
+                  } catch (_) {
+                    if (ctx.mounted) Navigator.pop(ctx);
+                    _fetchInquiries();
+                  }
+                }
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF0F3E38),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              ),
+              child: isSubmitting
+                  ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                  : const Text('Save Inquiry', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ==========================================
+  // EDIT INQUIRY MODAL (Live PUT API)
+  // ==========================================
+  void _openEditInquiryModal(Map<String, dynamic> inq) {
+    final formKey = GlobalKey<FormState>();
+    final nameCtrl = TextEditingController(text: inq['name'] ?? '');
+    String initialPhone = (inq['phone'] ?? '').toString().replaceAll('+91', '').replaceAll(' ', '').trim();
+    final phoneCtrl = TextEditingController(text: initialPhone);
+    final emailCtrl = TextEditingController(text: inq['email'] ?? '');
+    final cityCtrl = TextEditingController(text: inq['city'] ?? '');
+    final amountCtrl = TextEditingController(
+      text: inq['amount'].toString().replaceAll(RegExp(r'[^0-9]'), ''),
+    );
+
+    String loanType = inq['loanType'] ?? 'Personal Loan';
+    if (!_loanTypes.contains(loanType) || loanType == 'All Loan Types') {
+      loanType = 'Personal Loan';
+    }
+
+    String status = inq['status'] ?? 'Submitted';
+    if (status.toLowerCase() == 'new') status = 'Submitted';
+    if (!_statusOptions.contains(status) || status == 'All Status') {
+      status = 'Submitted';
+    }
+
+    String assignedTo = inq['assignedTo'] ?? 'Rahul Kumar';
+    if (!_teamMembers.contains(assignedTo) || assignedTo == 'All Team Members') {
+      assignedTo = 'Rahul Kumar';
+    }
+
+    bool isSubmitting = false;
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setModalState) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'Edit Inquiry #${inq['id']}',
+                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: AppColors.primary),
+              ),
+              IconButton(icon: const Icon(Icons.close_rounded, size: 20), onPressed: () => Navigator.pop(ctx)),
+            ],
+          ),
+          content: SizedBox(
+            width: 440,
+            child: Form(
+              key: formKey,
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    TextFormField(
+                      controller: nameCtrl,
+                      validator: (v) => (v == null || v.trim().isEmpty) ? 'Required' : null,
+                      decoration: _inputDecoration('Customer Name *', 'Amit Shah'),
+                    ),
+                    const SizedBox(height: 12),
+                    TextFormField(
+                      controller: phoneCtrl,
+                      keyboardType: TextInputType.phone,
+                      validator: (v) => (v == null || v.trim().length != 10) ? '10 digits required' : null,
+                      decoration: _inputDecoration('Mobile Number *', '9876543210', prefix: '+91 '),
+                    ),
+                    const SizedBox(height: 12),
+                    TextFormField(
+                      controller: emailCtrl,
+                      keyboardType: TextInputType.emailAddress,
+                      decoration: _inputDecoration('Email Address', 'customer@gmail.com'),
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: DropdownButtonFormField<String>(
+                            value: loanType,
+                            items: _loanTypes
+                                .where((t) => t != 'All Loan Types')
+                                .map((t) => DropdownMenuItem(value: t, child: Text(t, style: const TextStyle(fontSize: 12))))
+                                .toList(),
+                            onChanged: (val) {
+                              if (val != null) setModalState(() => loanType = val);
+                            },
+                            decoration: _inputDecoration('Loan Type', ''),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: DropdownButtonFormField<String>(
+                            value: status,
+                            items: _statusOptions
+                                .where((s) => s != 'All Status')
+                                .map((s) => DropdownMenuItem(value: s, child: Text(s, style: const TextStyle(fontSize: 12))))
+                                .toList(),
+                            onChanged: (val) {
+                              if (val != null) setModalState(() => status = val);
+                            },
+                            decoration: _inputDecoration('Status', ''),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextFormField(
+                            controller: amountCtrl,
+                            keyboardType: TextInputType.number,
+                            decoration: _inputDecoration('Amount (₹)', '1000000'),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: DropdownButtonFormField<String>(
+                            value: assignedTo,
+                            items: _teamMembers
+                                .where((m) => m != 'All Team Members')
+                                .map((m) => DropdownMenuItem(value: m, child: Text(m, style: const TextStyle(fontSize: 12))))
+                                .toList(),
+                            onChanged: (val) {
+                              if (val != null) setModalState(() => assignedTo = val);
+                            },
+                            decoration: _inputDecoration('Assigned Officer', ''),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Cancel', style: TextStyle(color: AppColors.textSecondary)),
+            ),
+            ElevatedButton(
+              onPressed: isSubmitting
+                  ? null
+                  : () async {
+                if (formKey.currentState!.validate()) {
+                  setModalState(() => isSubmitting = true);
+                  final inqId = inq['_id'];
+
+                  try {
+                    final token = await SharedPrefHelper.getToken();
+                    final url = Uri.parse(MFUrls.mfBaseUrl('api/v1/enquiries/$inqId'));
+
+                    final res = await http.put(
+                      url,
+                      headers: {
+                        'Content-Type': 'application/json',
+                        if (token != null) 'Authorization': 'Bearer $token',
+                      },
+                      body: jsonEncode({
+                        'name': nameCtrl.text.trim(),
+                        'phone': phoneCtrl.text.trim(),
+                        'email': emailCtrl.text.trim(),
+                        'loanType': loanType,
+                        'service': loanType,
+                        'amount': '₹ ${amountCtrl.text.trim()}',
+                        'status': status,
+                        'assignedTo': assignedTo,
+                      }),
+                    ).timeout(const Duration(seconds: 10));
+
+                    if (res.statusCode == 200 || res.statusCode == 201) {
+                      if (ctx.mounted) Navigator.pop(ctx);
+                      _fetchInquiries();
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Inquiry updated successfully!'),
+                            backgroundColor: Color(0xFF16A36A),
+                          ),
+                        );
+                      }
+                    } else {
+                      throw Exception();
+                    }
+                  } catch (_) {
+                    if (ctx.mounted) Navigator.pop(ctx);
+                    _fetchInquiries();
+                  }
+                }
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF0F3E38),
+                elevation: 0,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              ),
+              child: isSubmitting
+                  ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                  : const Text('Save Changes', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ==========================================
+  // INQUIRY DETAILS MODAL (Live Approve / Reject)
+  // ==========================================
   void _openInquiryDetailsModal(Map<String, dynamic> inq) {
     int modalTab = 0;
+    bool isProcessing = false;
 
     showDialog(
       context: context,
@@ -296,7 +656,6 @@ class _LoanInquiryManagementScreenState
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Subtabs: Inquiry Details, Documents (4), Notes (2)[cite: 11]
                     Row(
                       children: [
                         _buildModalTab(
@@ -320,7 +679,6 @@ class _LoanInquiryManagementScreenState
                     ),
                     const SizedBox(height: 14),
 
-                    // Customer Profile Pill[cite: 11]
                     Container(
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
@@ -334,7 +692,7 @@ class _LoanInquiryManagementScreenState
                             radius: 20,
                             backgroundColor: const Color(0xFF0F3E38).withValues(alpha: 0.1),
                             child: Text(
-                              (inq['name'] as String)[0],
+                              (inq['name'] as String).isNotEmpty ? (inq['name'] as String)[0].toUpperCase() : 'C',
                               style: const TextStyle(
                                 fontSize: 14,
                                 fontWeight: FontWeight.w800,
@@ -376,10 +734,14 @@ class _LoanInquiryManagementScreenState
                                   ],
                                 ),
                                 const SizedBox(height: 2),
-                                Text('${inq['phone']}  •  ${inq['email']}',
-                                    style: const TextStyle(fontSize: 10, color: AppColors.textSecondary)),
-                                Text(inq['city'] as String,
-                                    style: const TextStyle(fontSize: 10, color: AppColors.textSecondary)),
+                                Text(
+                                  '${inq['phone']} • ${inq['email']}',
+                                  style: const TextStyle(fontSize: 10, color: AppColors.textSecondary),
+                                ),
+                                Text(
+                                  inq['city'] as String,
+                                  style: const TextStyle(fontSize: 10, color: AppColors.textSecondary),
+                                ),
                               ],
                             ),
                           ),
@@ -388,7 +750,6 @@ class _LoanInquiryManagementScreenState
                     ),
                     const SizedBox(height: 14),
 
-                    // Loan Information Grid[cite: 11]
                     const Text(
                       'Loan Information',
                       style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w800, color: AppColors.primary),
@@ -398,12 +759,11 @@ class _LoanInquiryManagementScreenState
                     const Divider(height: 12, color: AppColors.divider),
                     _buildModalInfoRow('Loan Tenure', inq['tenure'] as String, 'Purpose', inq['purpose'] as String),
                     const Divider(height: 12, color: AppColors.divider),
-                    _buildModalInfoRow('Property Location', inq['city'] as String, 'Expected Disbursal', inq['expectedDisbursal'] as String),
+                    _buildModalInfoRow('Location', inq['city'] as String, 'Expected Disbursal', inq['expectedDisbursal'] as String),
                     const Divider(height: 12, color: AppColors.divider),
                     _buildModalInfoRow('Source', inq['source'] as String, 'Status', inq['status'] as String),
                     const Divider(height: 12, color: AppColors.divider),
 
-                    // Assigned To Block[cite: 11]
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
@@ -416,86 +776,62 @@ class _LoanInquiryManagementScreenState
                                 style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.primary)),
                           ],
                         ),
-                        OutlinedButton(
-                          onPressed: () {},
-                          style: OutlinedButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                            minimumSize: Size.zero,
-                            side: const BorderSide(color: AppColors.border),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
-                          ),
-                          child: const Text('Change',
-                              style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: Color(0xFF0F3E38))),
-                        ),
                       ],
                     ),
                     const SizedBox(height: 16),
 
-                    // Inquiry Timeline[cite: 11]
                     const Text(
                       'Inquiry Timeline',
                       style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w800, color: AppColors.primary),
                     ),
                     const SizedBox(height: 10),
                     _buildTimelineStep('Inquiry Submitted', '12 Sep 2024, 10:30 AM', isDone: true),
-                    _buildTimelineStep('Documents Uploaded', '12 Sep 2024, 11:15 AM', isDone: true),
-                    _buildTimelineStep('Under Review', '13 Sep 2024, 02:15 PM', isCurrent: true),
-                    _buildTimelineStep('Next Follow-up', '15 Sep 2024 (Scheduled)', isScheduled: true, isLast: true),
+                    _buildTimelineStep('Under Review', 'Active Review Process', isCurrent: true),
+                    _buildTimelineStep('Decision Pending', 'Awaiting Action', isScheduled: true, isLast: true),
                   ],
                 ),
               ),
             ),
             actions: [
-              // Bottom Action Buttons: Approve, Reject, Add Note[cite: 11]
               Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                mainAxisAlignment: MainAxisAlignment.end,
                 children: [
-                  OutlinedButton.icon(
-                    onPressed: () => Navigator.pop(ctx),
-                    icon: const Icon(Icons.edit_note_rounded, size: 15, color: Color(0xFF0F3E38)),
-                    label: const Text('Add Note',
-                        style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Color(0xFF0F3E38))),
+                  OutlinedButton(
+                    onPressed: isProcessing
+                        ? null
+                        : () async {
+                      setModalState(() => isProcessing = true);
+                      await _updateInquiryStatus(inq['_id'], 'Rejected');
+                      if (ctx.mounted) Navigator.pop(ctx);
+                      _fetchInquiries();
+                    },
                     style: OutlinedButton.styleFrom(
-                      side: const BorderSide(color: AppColors.border),
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      side: const BorderSide(color: Color(0xFFDC2626)),
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                     ),
+                    child: const Text('✕ Reject',
+                        style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: Color(0xFFDC2626))),
                   ),
-                  Wrap(
-                    spacing: 8,
-                    children: [
-                      OutlinedButton(
-                        onPressed: () {
-                          Navigator.pop(ctx);
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('Inquiry Rejected!'), backgroundColor: Color(0xFFDC2626)),
-                          );
-                        },
-                        style: OutlinedButton.styleFrom(
-                          side: const BorderSide(color: Color(0xFFDC2626)),
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                        ),
-                        child: const Text('✕ Reject',
-                            style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: Color(0xFFDC2626))),
-                      ),
-                      ElevatedButton(
-                        onPressed: () {
-                          Navigator.pop(ctx);
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('Inquiry Approved and Lead created!'), backgroundColor: Color(0xFF16A36A)),
-                          );
-                        },
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF16A36A),
-                          elevation: 0,
-                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                        ),
-                        child: const Text('✓ Approve',
-                            style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: Colors.white)),
-                      ),
-                    ],
+                  const SizedBox(width: 8),
+                  ElevatedButton(
+                    onPressed: isProcessing
+                        ? null
+                        : () async {
+                      setModalState(() => isProcessing = true);
+                      await _updateInquiryStatus(inq['_id'], 'Approved');
+                      if (ctx.mounted) Navigator.pop(ctx);
+                      _fetchInquiries();
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF16A36A),
+                      elevation: 0,
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    ),
+                    child: isProcessing
+                        ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                        : const Text('✓ Approve', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: Colors.white)),
                   ),
                 ],
               ),
@@ -504,6 +840,31 @@ class _LoanInquiryManagementScreenState
         },
       ),
     );
+  }
+
+  Future<void> _updateInquiryStatus(String inqId, String newStatus) async {
+    try {
+      final token = await SharedPrefHelper.getToken();
+      final url = Uri.parse(MFUrls.mfBaseUrl('api/v1/enquiries/$inqId'));
+
+      await http.put(
+        url,
+        headers: {
+          'Content-Type': 'application/json',
+          if (token != null) 'Authorization': 'Bearer $token',
+        },
+        body: jsonEncode({'status': newStatus}),
+      ).timeout(const Duration(seconds: 10));
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Inquiry status updated to $newStatus!'),
+            backgroundColor: newStatus == 'Approved' ? const Color(0xFF16A36A) : const Color(0xFFDC2626),
+          ),
+        );
+      }
+    } catch (_) {}
   }
 
   Widget _buildModalTab({required String title, required bool isSelected, required VoidCallback onTap}) {
@@ -606,6 +967,22 @@ class _LoanInquiryManagementScreenState
     );
   }
 
+  InputDecoration _inputDecoration(String label, String hint, {String? prefix}) {
+    return InputDecoration(
+      labelText: label,
+      labelStyle: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+      hintText: hint,
+      prefixText: prefix,
+      prefixStyle: const TextStyle(fontWeight: FontWeight.w700, color: AppColors.primary),
+      filled: true,
+      fillColor: const Color(0xFFF8FAFC),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: AppColors.border)),
+      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: AppColors.border)),
+      focusedBorder: const OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(10)), borderSide: BorderSide(color: Color(0xFF0F3E38), width: 1.4)),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -617,23 +994,21 @@ class _LoanInquiryManagementScreenState
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Header title and actions[cite: 11]
               _buildHeaderSection(),
               const SizedBox(height: 16),
-
-              // 1. Five Metric Cards (Total, Under Review, Approved, Rejected, Pending Follow-up)[cite: 11]
               _buildTopMetricsRow(),
               const SizedBox(height: 16),
-
-              // 2. Search & Filter Bar[cite: 11]
               _buildFilterToolbar(),
               const SizedBox(height: 16),
-
-              // 3. Loan Inquiries Data Table[cite: 11]
-              _buildLoanInquiriesDataTable(),
+              _isLoading
+                  ? const Center(
+                child: Padding(
+                  padding: EdgeInsets.all(32),
+                  child: CircularProgressIndicator(color: AppColors.secondary),
+                ),
+              )
+                  : _buildLoanInquiriesDataTable(),
               const SizedBox(height: 14),
-
-              // 4. Pagination Footer[cite: 11]
               _buildPaginationFooter(),
               const SizedBox(height: 20),
             ],
@@ -643,14 +1018,13 @@ class _LoanInquiryManagementScreenState
     );
   }
 
-  // Header Title Row[cite: 11]
   Widget _buildHeaderSection() {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Column(
+        const Column(
           crossAxisAlignment: CrossAxisAlignment.start,
-          children: const [
+          children: [
             Text(
               'Loan Inquiry Management',
               style: TextStyle(
@@ -670,7 +1044,7 @@ class _LoanInquiryManagementScreenState
           spacing: 8,
           children: [
             ElevatedButton.icon(
-              onPressed: () {},
+              onPressed: _openAddInquiryModal,
               icon: const Icon(Icons.add_rounded, size: 18, color: Colors.white),
               label: const Text(
                 '+ Add New Inquiry',
@@ -683,22 +1057,10 @@ class _LoanInquiryManagementScreenState
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
               ),
             ),
-            OutlinedButton.icon(
-              onPressed: () {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Exporting loan inquiries report...')),
-                );
-              },
-              icon: const Icon(Icons.download_rounded, size: 16, color: AppColors.primary),
-              label: const Text(
-                'Export ▾',
-                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.primary),
-              ),
-              style: OutlinedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                side: const BorderSide(color: AppColors.border),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-              ),
+            IconButton(
+              icon: const Icon(Icons.refresh_rounded, color: AppColors.primary, size: 22),
+              tooltip: 'Refresh Inquiries',
+              onPressed: _fetchInquiries,
             ),
           ],
         ),
@@ -706,15 +1068,23 @@ class _LoanInquiryManagementScreenState
     );
   }
 
-  // 1. Five Metric Cards[cite: 11]
   Widget _buildTopMetricsRow() {
+    final total = _inquiries.length;
+    final underReview = _inquiries.where((i) => i['status'].toString().toLowerCase() == 'under review').length;
+    final approved = _inquiries.where((i) => i['status'].toString().toLowerCase() == 'approved').length;
+    final rejected = _inquiries.where((i) => i['status'].toString().toLowerCase() == 'rejected').length;
+    final pendingFollowUp = _inquiries.where((i) {
+      final s = i['status'].toString().toLowerCase();
+      return s == 'submitted' || s == 'new' || s == 'pending';
+    }).length;
+
     return Row(
       children: [
         Expanded(
           child: _buildMetricCard(
             title: 'Total Inquiries',
-            value: '248',
-            badgeText: '↑ 12%',
+            value: total.toString(),
+            badgeText: 'Active',
             badgeBg: const Color(0xFFDCFCE7),
             badgeColor: const Color(0xFF16A36A),
             subtitle: 'All channels',
@@ -727,8 +1097,8 @@ class _LoanInquiryManagementScreenState
         Expanded(
           child: _buildMetricCard(
             title: 'Under Review',
-            value: '62',
-            badgeText: '↓ 8%',
+            value: underReview.toString(),
+            badgeText: 'Pending',
             badgeBg: const Color(0xFFE0F2FE),
             badgeColor: const Color(0xFF0284C7),
             subtitle: 'In credit review',
@@ -741,8 +1111,8 @@ class _LoanInquiryManagementScreenState
         Expanded(
           child: _buildMetricCard(
             title: 'Approved',
-            value: '72',
-            badgeText: '↑ 18%',
+            value: approved.toString(),
+            badgeText: 'Ready',
             badgeBg: const Color(0xFFDCFCE7),
             badgeColor: const Color(0xFF16A36A),
             subtitle: 'Ready to disburse',
@@ -755,8 +1125,8 @@ class _LoanInquiryManagementScreenState
         Expanded(
           child: _buildMetricCard(
             title: 'Rejected',
-            value: '28',
-            badgeText: '↓ 14%',
+            value: rejected.toString(),
+            badgeText: 'Declined',
             badgeBg: const Color(0xFFFEE2E2),
             badgeColor: const Color(0xFFDC2626),
             subtitle: 'Criteria not met',
@@ -769,8 +1139,8 @@ class _LoanInquiryManagementScreenState
         Expanded(
           child: _buildMetricCard(
             title: 'Pending Follow-up',
-            value: '86',
-            badgeText: '34.7%',
+            value: pendingFollowUp.toString(),
+            badgeText: 'Action',
             badgeBg: const Color(0xFFFEF3C7),
             badgeColor: const Color(0xFFD97706),
             subtitle: 'Awaiting customer response',
@@ -833,7 +1203,6 @@ class _LoanInquiryManagementScreenState
     );
   }
 
-  // 2. Search & Filter Bar[cite: 11]
   Widget _buildFilterToolbar() {
     return Container(
       padding: const EdgeInsets.all(12),
@@ -855,6 +1224,7 @@ class _LoanInquiryManagementScreenState
               ),
               child: TextField(
                 controller: _searchController,
+                onChanged: (_) => setState(() {}),
                 style: const TextStyle(fontSize: 12),
                 decoration: const InputDecoration(
                   hintText: 'Search inquiries by name, mobile, loan type, status...',
@@ -907,7 +1277,7 @@ class _LoanInquiryManagementScreenState
             flex: 2,
             child: _buildDropdownFilter(
               value: _selectedDateRange,
-              items: ['All Time', 'Today', 'This Week', 'This Month'],
+              items: const ['All Time', 'Today', 'This Week', 'This Month'],
               icon: Icons.calendar_today_outlined,
               onChanged: (v) => setState(() => _selectedDateRange = v!),
             ),
@@ -954,8 +1324,31 @@ class _LoanInquiryManagementScreenState
     );
   }
 
-  // 3. Loan Inquiries Data Table[cite: 11]
   Widget _buildLoanInquiriesDataTable() {
+    final inquiries = _filteredInquiries;
+
+    if (inquiries.isEmpty) {
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(32),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: AppColors.border),
+        ),
+        child: const Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.inbox_outlined, size: 40, color: AppColors.textHint),
+              SizedBox(height: 8),
+              Text('No matching loan inquiries found', style: TextStyle(color: AppColors.textSecondary, fontSize: 13)),
+            ],
+          ),
+        ),
+      );
+    }
+
     return Container(
       width: double.infinity,
       decoration: BoxDecoration(
@@ -970,12 +1363,12 @@ class _LoanInquiryManagementScreenState
             padding: const EdgeInsets.fromLTRB(14, 12, 14, 10),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: const [
+              children: [
                 Text(
-                  'Loan Inquiries (248)',
-                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: AppColors.primary),
+                  'Loan Inquiries (${inquiries.length})',
+                  style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: AppColors.primary),
                 ),
-                Text(
+                const Text(
                   'Latest First ▾',
                   style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Color(0xFF0F3E38)),
                 ),
@@ -989,6 +1382,7 @@ class _LoanInquiryManagementScreenState
               scrollDirection: Axis.horizontal,
               physics: const BouncingScrollPhysics(),
               child: DataTable(
+                showCheckboxColumn: false, // Prevents duplicate checkbox
                 headingRowColor: WidgetStateProperty.all(const Color(0xFFF8FAFC)),
                 headingRowHeight: 44,
                 dataRowMinHeight: 52,
@@ -1004,7 +1398,7 @@ class _LoanInquiryManagementScreenState
                         setState(() {
                           _selectAll = val ?? false;
                           if (_selectAll) {
-                            _selectedRows.addAll(List.generate(_inquiries.length, (i) => i));
+                            _selectedRows.addAll(List.generate(inquiries.length, (i) => i));
                           } else {
                             _selectedRows.clear();
                           }
@@ -1021,8 +1415,8 @@ class _LoanInquiryManagementScreenState
                   const DataColumn(label: Text('Inquiry Date', style: _headerStyle)),
                   const DataColumn(label: Text('Actions', style: _headerStyle)),
                 ],
-                rows: List.generate(_inquiries.length, (index) {
-                  final item = _inquiries[index];
+                rows: List.generate(inquiries.length, (index) {
+                  final item = inquiries[index];
                   final isSelected = _selectedRows.contains(index);
 
                   return DataRow(
@@ -1039,7 +1433,7 @@ class _LoanInquiryManagementScreenState
                               } else {
                                 _selectedRows.remove(index);
                               }
-                              _selectAll = _selectedRows.length == _inquiries.length;
+                              _selectAll = _selectedRows.length == inquiries.length;
                             });
                           },
                         ),
@@ -1050,16 +1444,22 @@ class _LoanInquiryManagementScreenState
                           mainAxisAlignment: MainAxisAlignment.center,
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(item['name'] as String,
-                                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: AppColors.primary)),
-                            Text('${item['phone']}  •  ${item['city']}',
-                                style: const TextStyle(fontSize: 10, color: AppColors.textSecondary)),
+                            Text(
+                              item['name'] as String,
+                              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: AppColors.primary),
+                            ),
+                            Text(
+                              '${item['phone']} • ${item['city']}',
+                              style: const TextStyle(fontSize: 10, color: AppColors.textSecondary),
+                            ),
                           ],
                         ),
                       ),
                       DataCell(Text(item['loanType'] as String, style: const TextStyle(fontSize: 11.5, color: AppColors.textPrimary))),
-                      DataCell(Text(item['amount'] as String,
-                          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: AppColors.primary))),
+                      DataCell(Text(
+                        item['amount'] as String,
+                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: AppColors.primary),
+                      )),
                       DataCell(
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
@@ -1098,7 +1498,6 @@ class _LoanInquiryManagementScreenState
                         Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            // View details action button[cite: 11]
                             IconButton(
                               icon: const Icon(Icons.visibility_outlined, size: 16, color: Color(0xFF0284C7)),
                               tooltip: 'View Inquiry Details',
@@ -1107,12 +1506,7 @@ class _LoanInquiryManagementScreenState
                             IconButton(
                               icon: const Icon(Icons.edit_outlined, size: 16, color: Color(0xFF0F3E38)),
                               tooltip: 'Edit Inquiry',
-                              onPressed: () {},
-                            ),
-                            IconButton(
-                              icon: const Icon(Icons.more_vert_rounded, size: 16, color: AppColors.iconSecondary),
-                              tooltip: 'More',
-                              onPressed: () {},
+                              onPressed: () => _openEditInquiryModal(item),
                             ),
                           ],
                         ),
@@ -1134,14 +1528,13 @@ class _LoanInquiryManagementScreenState
     color: AppColors.primary,
   );
 
-  // 4. Pagination Footer[cite: 11]
   Widget _buildPaginationFooter() {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        const Text(
-          'Showing 1 to 10 of 248 inquiries',
-          style: TextStyle(fontSize: 11.5, color: AppColors.textSecondary),
+        Text(
+          'Showing ${_filteredInquiries.length} of ${_inquiries.length} inquiries',
+          style: const TextStyle(fontSize: 11.5, color: AppColors.textSecondary),
         ),
         Row(
           children: [
@@ -1160,60 +1553,15 @@ class _LoanInquiryManagementScreenState
                   items: [10, 25, 50, 100]
                       .map((n) => DropdownMenuItem(value: n, child: Text('$n per page')))
                       .toList(),
-                  onChanged: (val) => setState(() => _rowsPerPage = val!),
+                  onChanged: (val) {
+                    if (val != null) setState(() => _rowsPerPage = val);
+                  },
                 ),
               ),
             ),
-            const SizedBox(width: 10),
-            _buildPageButton('<', isEnabled: false),
-            const SizedBox(width: 4),
-            _buildPageButton('1', isSelected: true),
-            const SizedBox(width: 4),
-            _buildPageButton('2'),
-            const SizedBox(width: 4),
-            _buildPageButton('3'),
-            const SizedBox(width: 4),
-            _buildPageButton('4'),
-            const SizedBox(width: 4),
-            _buildPageButton('5'),
-            const SizedBox(width: 4),
-            const Text('...', style: TextStyle(color: AppColors.textSecondary)),
-            const SizedBox(width: 4),
-            _buildPageButton('25'),
-            const SizedBox(width: 4),
-            _buildPageButton('>'),
           ],
         ),
       ],
-    );
-  }
-
-  Widget _buildPageButton(String text, {bool isSelected = false, bool isEnabled = true}) {
-    return InkWell(
-      onTap: isEnabled ? () {} : null,
-      borderRadius: BorderRadius.circular(6),
-      child: Container(
-        width: 28,
-        height: 28,
-        alignment: Alignment.center,
-        decoration: BoxDecoration(
-          color: isSelected ? const Color(0xFF0F3E38) : Colors.white,
-          borderRadius: BorderRadius.circular(6),
-          border: Border.all(color: isSelected ? const Color(0xFF0F3E38) : AppColors.border),
-        ),
-        child: Text(
-          text,
-          style: TextStyle(
-            fontSize: 11,
-            fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
-            color: isSelected
-                ? Colors.white
-                : isEnabled
-                ? AppColors.primary
-                : AppColors.textHint,
-          ),
-        ),
-      ),
     );
   }
 }

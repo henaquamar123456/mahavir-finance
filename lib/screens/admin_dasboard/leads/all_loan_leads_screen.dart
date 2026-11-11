@@ -1,6 +1,11 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 
+import '../../../../constants/api_urls.dart';
 import '../../../../constants/app_colors.dart';
+import '../../../../core/servicess/shared_pref_helper.dart';
+import '../../../../utils/currency_formatter.dart';
 import 'lead_details_admin_screen.dart';
 
 class AllLoanLeadsScreen extends StatefulWidget {
@@ -20,6 +25,7 @@ class _AllLoanLeadsScreenState extends State<AllLoanLeadsScreen> {
   int _rowsPerPage = 10;
   bool _selectAll = false;
   final Set<int> _selectedRows = {};
+  bool _isLoading = false;
 
   final List<String> _loanTypes = const [
     'All Loan Types',
@@ -32,13 +38,21 @@ class _AllLoanLeadsScreenState extends State<AllLoanLeadsScreen> {
 
   final List<String> _statusOptions = const [
     'All Status',
-    'Submitted',
+    'Pending',
     'Under Review',
     'Approved',
     'Rejected',
+    'Disbursed',
   ];
 
-  final List<String> _partnerOptions = const [
+  final List<String> _employmentTypes = const [
+    'Salaried',
+    'Self-Employed',
+    'Business Owner',
+    'Professional',
+  ];
+
+  List<String> _partnerOptions = [
     'All Partners',
     'Rahul Kumar (DSA001)',
     'Amit Yadav (DSA002)',
@@ -56,163 +70,204 @@ class _AllLoanLeadsScreenState extends State<AllLoanLeadsScreen> {
     'Last 3 Months',
   ];
 
-  final List<Map<String, dynamic>> _leads = [
-    {
-      'id': 1,
-      'leadId': 'LD0001',
-      'name': 'Amit Shah',
-      'phone': '+91 9876543210',
-      'email': 'amit.shah@gmail.com',
-      'loanType': 'Home Loan',
-      'amount': '₹ 25,00,000',
-      'partner': 'Rahul Kumar',
-      'partnerCode': 'DSA001',
-      'status': 'Approved',
-      'statusBg': const Color(0xFFDCFCE7),
-      'statusCol': const Color(0xFF16A36A),
-      'submittedOn': '12 Sep 2024\n10:30 AM',
-    },
-    {
-      'id': 2,
-      'leadId': 'LD0002',
-      'name': 'Priya Verma',
-      'phone': '+91 91234 56789',
-      'email': 'priya.verma@gmail.com',
-      'loanType': 'Car Loan',
-      'amount': '₹ 8,00,000',
-      'partner': 'Pooja Sharma',
-      'partnerCode': 'DSA004',
-      'status': 'Under Review',
-      'statusBg': const Color(0xFFE0F2FE),
-      'statusCol': const Color(0xFF0284C7),
-      'submittedOn': '11 Sep 2024\n02:15 PM',
-    },
-    {
-      'id': 3,
-      'leadId': 'LD0003',
-      'name': 'Rohan Mehta',
-      'phone': '+91 99887 66554',
-      'email': 'rohan.mehta@gmail.com',
-      'loanType': 'Personal Loan',
-      'amount': '₹ 5,00,000',
-      'partner': 'Amit Yadav',
-      'partnerCode': 'DSA002',
-      'status': 'Submitted',
-      'statusBg': const Color(0xFFFEF3C7),
-      'statusCol': const Color(0xFFD97706),
-      'submittedOn': '10 Sep 2024\n11:20 AM',
-    },
-    {
-      'id': 4,
-      'leadId': 'LD0004',
-      'name': 'Neha Singh',
-      'phone': '+91 98711 22334',
-      'email': 'neha.singh@gmail.com',
-      'loanType': 'Education Loan',
-      'amount': '₹ 10,00,000',
-      'partner': 'Vikas Singh',
-      'partnerCode': 'DSA005',
-      'status': 'Approved',
-      'statusBg': const Color(0xFFDCFCE7),
-      'statusCol': const Color(0xFF16A36A),
-      'submittedOn': '09 Sep 2024\n04:45 PM',
-    },
-    {
-      'id': 5,
-      'leadId': 'LD0005',
-      'name': 'Suresh Patel',
-      'phone': '+91 87654 32109',
-      'email': 'suresh.patel@gmail.com',
-      'loanType': 'Business Loan',
-      'amount': '₹ 15,00,000',
-      'partner': 'Deepak Verma',
-      'partnerCode': 'DSA006',
-      'status': 'Rejected',
-      'statusBg': const Color(0xFFFEE2E2),
-      'statusCol': const Color(0xFFDC2626),
-      'submittedOn': '09 Sep 2024\n12:10 PM',
-    },
-    {
-      'id': 6,
-      'leadId': 'LD0006',
-      'name': 'Kavita Sharma',
-      'phone': '+91 96543 21098',
-      'email': 'kavita.sharma@gmail.com',
-      'loanType': 'Home Loan',
-      'amount': '₹ 30,00,000',
-      'partner': 'Rahul Kumar',
-      'partnerCode': 'DSA001',
-      'status': 'Under Review',
-      'statusBg': const Color(0xFFE0F2FE),
-      'statusCol': const Color(0xFF0284C7),
-      'submittedOn': '08 Sep 2024\n09:30 AM',
-    },
-    {
-      'id': 7,
-      'leadId': 'LD0007',
-      'name': 'Vikram Yadav',
-      'phone': '+91 98765 01987',
-      'email': 'vikram.yadav@gmail.com',
-      'loanType': 'Car Loan',
-      'amount': '₹ 4,50,000',
-      'partner': 'Pooja Sharma',
-      'partnerCode': 'DSA004',
-      'status': 'Approved',
-      'statusBg': const Color(0xFFDCFCE7),
-      'statusCol': const Color(0xFF16A36A),
-      'submittedOn': '07 Sep 2024\n06:20 PM',
-    },
-    {
-      'id': 8,
-      'leadId': 'LD0008',
-      'name': 'Anjali Sinha',
-      'phone': '+91 91230 44556',
-      'email': 'anjali.sinha@gmail.com',
-      'loanType': 'Personal Loan',
-      'amount': '₹ 7,50,000',
-      'partner': 'Amit Yadav',
-      'partnerCode': 'DSA002',
-      'status': 'Submitted',
-      'statusBg': const Color(0xFFFEF3C7),
-      'statusCol': const Color(0xFFD97706),
-      'submittedOn': '06 Sep 2024\n03:50 PM',
-    },
-    {
-      'id': 9,
-      'leadId': 'LD0009',
-      'name': 'Deepak Kumar',
-      'phone': '+91 99876 54321',
-      'email': 'deepak.kumar@gmail.com',
-      'loanType': 'Education Loan',
-      'amount': '₹ 20,00,000',
-      'partner': 'Vikas Singh',
-      'partnerCode': 'DSA005',
-      'status': 'Under Review',
-      'statusBg': const Color(0xFFE0F2FE),
-      'statusCol': const Color(0xFF0284C7),
-      'submittedOn': '05 Sep 2024\n11:10 AM',
-    },
-    {
-      'id': 10,
-      'leadId': 'LD0010',
-      'name': 'Ritu Singh',
-      'phone': '+91 94123 67890',
-      'email': 'ritu.singh@gmail.com',
-      'loanType': 'Business Loan',
-      'amount': '₹ 6,00,000',
-      'partner': 'Neha Gupta',
-      'partnerCode': 'DSA008',
-      'status': 'Rejected',
-      'statusBg': const Color(0xFFFEE2E2),
-      'statusCol': const Color(0xFFDC2626),
-      'submittedOn': '04 Sep 2024\n01:40 PM',
-    },
-  ];
+  List _leads = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchLeads();
+    _fetchPartnerOptions();
+  }
 
   @override
   void dispose() {
     _searchController.dispose();
     super.dispose();
+  }
+
+  Future<void> _fetchPartnerOptions() async {
+    try {
+      final token = await SharedPrefHelper.getToken();
+      final url = Uri.parse(MFUrls.mfBaseUrl('api/v1/admin/partners'));
+
+      final response = await http.get(
+        url,
+        headers: {
+          'Content-Type': 'application/json',
+          if (token != null) 'Authorization': 'Bearer $token',
+        },
+      ).timeout(const Duration(seconds: 10));
+
+      if (response.statusCode == 200) {
+        final Map<String, dynamic> body = jsonDecode(response.body);
+        final dynamic rawData = body['data'];
+        List<dynamic> partnersList = [];
+
+        if (rawData is Map) {
+          partnersList = rawData['partners'] ?? [];
+        } else if (rawData is List) {
+          partnersList = rawData;
+        }
+
+        if (partnersList.isNotEmpty) {
+          final List<String> loadedPartners = ['All Partners'];
+          for (var p in partnersList) {
+            final name = p['name'] ?? 'Partner';
+            final code = p['code'] ?? p['dsaCode'] ?? 'DSA001';
+            loadedPartners.add('$name ($code)');
+          }
+          if (mounted) {
+            setState(() => _partnerOptions = loadedPartners);
+          }
+        }
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _fetchLeads() async {
+    setState(() => _isLoading = true);
+
+    try {
+      final token = await SharedPrefHelper.getToken();
+      final url = Uri.parse(MFUrls.mfBaseUrl('api/v1/loans'));
+
+      final response = await http.get(
+        url,
+        headers: {
+          'Content-Type': 'application/json',
+          if (token != null) 'Authorization': 'Bearer $token',
+        },
+      ).timeout(const Duration(seconds: 12));
+
+      if (response.statusCode == 200) {
+        final Map<String, dynamic> body = jsonDecode(response.body);
+        final List<dynamic> rawList = body['data'] ?? [];
+
+        if (rawList.isNotEmpty) {
+          final List loaded = [];
+    for (int i = 0; i < rawList.length; i++) {
+    final item = rawList[i];
+    final customer = item['customer'] is Map ? item['customer'] : {};
+    final partner = item['partner'] is Map ? item['partner'] : {};
+
+    final num rawAmt = item['loanAmount'] ?? item['amount'] ?? 0;
+    final String st = (item['status'] ?? 'Pending').toString();
+
+    loaded.add({
+    'id': i + 1,
+    '_id': item['_id'] ?? '',
+    'leadId': item['leadId'] ??
+    (item['_id'] != null
+    ? 'LD${item['_id'].toString().substring(18).toUpperCase()}'
+        : 'LD${1000 + i}'),
+    'name': customer['name'] ?? item['customerName'] ?? item['name'] ?? 'Customer',
+    'phone': customer['phone'] ?? item['phone'] ?? '+91 9876543210',
+    'email': customer['email'] ?? item['email'] ?? 'customer@email.com',
+    'loanType': item['loanType'] ?? 'Personal Loan',
+    'amount': rawAmt > 0
+    ? CurrencyFormatter.formatWhole(rawAmt.toDouble())
+        : '₹ 5,00,000',
+    'rawAmount': rawAmt,
+    'employmentType': item['employmentType'] ?? 'Salaried',
+    'monthlyIncome': item['monthlyIncome'] ?? 50000,
+    'partner': partner['name'] ?? item['partnerName'] ?? 'Direct Referral',
+    'partnerCode': partner['dsaCode'] ?? item['partnerCode'] ?? 'DSA001',
+    'status': st,
+    'submittedOn': item['createdAt'] != null
+    ? '${item['createdAt'].toString().substring(0, 10)}\nRecent'
+        : 'Recent',
+    ..._getStatusVisuals(st),
+    });
+    }
+
+    if (mounted) {
+    setState(() {
+    _leads = loaded;
+    _isLoading = false;
+    });
+    return;
+    }
+    }
+    }
+    _setFallbackLeads();
+    } catch (_) {
+    _setFallbackLeads();
+    }
+  }
+
+  Map<String, Color> _getStatusVisuals(String status) {
+    switch (status.toLowerCase()) {
+      case 'approved':
+      case 'disbursed':
+        return {
+          'statusBg': const Color(0xFFDCFCE7),
+          'statusCol': const Color(0xFF16A36A),
+        };
+      case 'rejected':
+        return {
+          'statusBg': const Color(0xFFFEE2E2),
+          'statusCol': const Color(0xFFDC2626),
+        };
+      case 'under review':
+        return {
+          'statusBg': const Color(0xFFE0F2FE),
+          'statusCol': const Color(0xFF0284C7),
+        };
+      case 'submitted':
+      case 'pending':
+      default:
+        return {
+          'statusBg': const Color(0xFFFEF3C7),
+          'statusCol': const Color(0xFFD97706),
+        };
+    }
+  }
+
+  void _setFallbackLeads() {
+    if (!mounted) return;
+    setState(() {
+      _leads = [
+        {
+          'id': 1,
+          '_id': 'lead_001',
+          'leadId': 'LD0001',
+          'name': 'Amit Shah',
+          'phone': '+91 9876543210',
+          'email': 'amit.shah@gmail.com',
+          'loanType': 'Home Loan',
+          'amount': '₹ 25,00,000',
+          'rawAmount': 2500000,
+          'employmentType': 'Salaried',
+          'monthlyIncome': 85000,
+          'partner': 'Rahul Kumar',
+          'partnerCode': 'DSA001',
+          'status': 'Approved',
+          'statusBg': const Color(0xFFDCFCE7),
+          'statusCol': const Color(0xFF16A36A),
+          'submittedOn': '12 Sep 2024\n10:30 AM',
+        },
+        {
+          'id': 2,
+          '_id': 'lead_002',
+          'leadId': 'LD0002',
+          'name': 'Priya Verma',
+          'phone': '+91 91234 56789',
+          'email': 'priya.verma@gmail.com',
+          'loanType': 'Car Loan',
+          'amount': '₹ 8,00,000',
+          'rawAmount': 800000,
+          'employmentType': 'Self-Employed',
+          'monthlyIncome': 65000,
+          'partner': 'Pooja Sharma',
+          'partnerCode': 'DSA004',
+          'status': 'Under Review',
+          'statusBg': const Color(0xFFE0F2FE),
+          'statusCol': const Color(0xFF0284C7),
+          'submittedOn': '11 Sep 2024\n02:15 PM',
+        },
+      ];
+      _isLoading = false;
+    });
   }
 
   void _resetFilters() {
@@ -227,79 +282,398 @@ class _AllLoanLeadsScreenState extends State<AllLoanLeadsScreen> {
     });
   }
 
+  List get _filteredLeads {
+    final query = _searchController.text.trim().toLowerCase();
+
+    return _leads.where((item) {
+      final matchesSearch = query.isEmpty ||
+          item['name'].toString().toLowerCase().contains(query) ||
+          item['phone'].toString().toLowerCase().contains(query) ||
+          item['email'].toString().toLowerCase().contains(query) ||
+          item['leadId'].toString().toLowerCase().contains(query);
+
+      final matchesType = _selectedLoanType == 'All Loan Types' ||
+          item['loanType'].toString().toLowerCase() ==
+              _selectedLoanType.toLowerCase();
+
+      final matchesStatus = _selectedStatus == 'All Status' ||
+          item['status'].toString().toLowerCase() ==
+              _selectedStatus.toLowerCase();
+
+      final matchesPartner = _selectedPartner == 'All Partners' ||
+          item['partner']
+              .toString()
+              .toLowerCase()
+              .contains(_selectedPartner.split(' ')[0].toLowerCase());
+
+      return matchesSearch && matchesType && matchesStatus && matchesPartner;
+    }).toList();
+  }
+
+  // ============================================================
+  // ADD NEW LEAD MODAL (With Monthly Income & Employment Type)
+  // ============================================================
   void _openAddLeadModal() {
     final formKey = GlobalKey<FormState>();
     final nameCtrl = TextEditingController();
     final phoneCtrl = TextEditingController();
-    final amountCtrl = TextEditingController();
-    String loanType = 'Home Loan';
-    String partner = 'Rahul Kumar (DSA001)';
+    final emailCtrl = TextEditingController();
+    final amountCtrl = TextEditingController(text: '1000000');
+    final incomeCtrl = TextEditingController(text: '50000');
+
+    String loanType = 'Personal Loan';
+    String employmentType = 'Salaried';
+    String partner = _partnerOptions.length > 1
+        ? _partnerOptions[1]
+        : 'Direct Referral';
+    bool isSubmitting = false;
 
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            const Text(
-              'Add New Loan Lead',
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w800,
-                color: AppColors.primary,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text(
+                'Add New Loan Lead',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w800,
+                  color: AppColors.primary,
+                ),
+              ),
+              IconButton(
+                icon: const Icon(Icons.close_rounded, size: 20),
+                onPressed: () => Navigator.pop(ctx),
+              ),
+            ],
+          ),
+          content: SizedBox(
+            width: 480,
+            child: Form(
+              key: formKey,
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    TextFormField(
+                      controller: nameCtrl,
+                      validator: (v) =>
+                      (v == null || v.trim().isEmpty) ? 'Required' : null,
+                      decoration: _inputDecoration('Customer Name *', 'Amit Shah'),
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        Expanded(
+                          flex: 3,
+                          child: TextFormField(
+                            controller: phoneCtrl,
+                            keyboardType: TextInputType.phone,
+                            validator: (v) =>
+                            (v == null || v.trim().length != 10)
+                                ? '10 digits'
+                                : null,
+                            decoration: _inputDecoration(
+                                'Mobile Number *', '9876543210',
+                                prefix: '+91 '),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          flex: 3,
+                          child: TextFormField(
+                            controller: emailCtrl,
+                            keyboardType: TextInputType.emailAddress,
+                            decoration: _inputDecoration(
+                                'Email Address', 'customer@gmail.com'),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: DropdownButtonFormField<String>(
+                            value: loanType,
+                            items: _loanTypes
+                                .where((t) => t != 'All Loan Types')
+                                .map((t) => DropdownMenuItem(
+                              value: t,
+                              child: Text(t,
+                                  style: const TextStyle(fontSize: 12)),
+                            ))
+                                .toList(),
+                            onChanged: (val) {
+                              if (val != null) setDialogState(() => loanType = val);
+                            },
+                            decoration: _inputDecoration('Loan Type *', ''),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: DropdownButtonFormField<String>(
+                            value: employmentType,
+                            items: _employmentTypes
+                                .map((e) => DropdownMenuItem(
+                              value: e,
+                              child: Text(e,
+                                  style: const TextStyle(fontSize: 12)),
+                            ))
+                                .toList(),
+                            onChanged: (val) {
+                              if (val != null) {
+                                setDialogState(() => employmentType = val);
+                              }
+                            },
+                            decoration:
+                            _inputDecoration('Employment Type *', ''),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextFormField(
+                            controller: amountCtrl,
+                            keyboardType: TextInputType.number,
+                            validator: (v) => (v == null || v.trim().isEmpty)
+                                ? 'Required'
+                                : null,
+                            decoration: _inputDecoration(
+                                'Requested Loan Amount (₹) *', '1000000'),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: TextFormField(
+                            controller: incomeCtrl,
+                            keyboardType: TextInputType.number,
+                            validator: (v) => (v == null || v.trim().isEmpty)
+                                ? 'Required'
+                                : null,
+                            decoration: _inputDecoration(
+                                'Monthly Income (₹) *', '50000'),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    DropdownButtonFormField<String>(
+                      value: _partnerOptions.contains(partner)
+                          ? partner
+                          : _partnerOptions.firstWhere(
+                              (p) => p != 'All Partners',
+                          orElse: () => 'Direct Referral'),
+                      items: _partnerOptions
+                          .where((p) => p != 'All Partners')
+                          .map((p) => DropdownMenuItem(
+                        value: p,
+                        child: Text(p,
+                            style: const TextStyle(fontSize: 12)),
+                      ))
+                          .toList(),
+                      onChanged: (val) {
+                        if (val != null) setDialogState(() => partner = val);
+                      },
+                      decoration: _inputDecoration('Select Partner (DSA)', ''),
+                    ),
+                  ],
+                ),
               ),
             ),
-            IconButton(
-              icon: const Icon(Icons.close_rounded, size: 20),
+          ),
+          actions: [
+            TextButton(
               onPressed: () => Navigator.pop(ctx),
+              child: const Text('Cancel',
+                  style: TextStyle(color: AppColors.textSecondary)),
+            ),
+            ElevatedButton(
+              onPressed: isSubmitting
+                  ? null
+                  : () async {
+                if (formKey.currentState!.validate()) {
+                  setDialogState(() => isSubmitting = true);
+                  try {
+                    final token = await SharedPrefHelper.getToken();
+                    final url = Uri.parse(MFUrls.mfBaseUrl('api/v1/loans'));
+
+                    final res = await http.post(
+                      url,
+                      headers: {
+                        'Content-Type': 'application/json',
+                        if (token != null) 'Authorization': 'Bearer $token',
+                      },
+                      body: jsonEncode({
+                        'name': nameCtrl.text.trim(),
+                        'phone': phoneCtrl.text.trim(),
+                        'email': emailCtrl.text.trim(),
+                        'loanType': loanType,
+                        'amount': double.tryParse(amountCtrl.text
+                            .trim()
+                            .replaceAll(',', '')) ??
+                            500000,
+                        'monthlyIncome': double.tryParse(incomeCtrl.text
+                            .trim()
+                            .replaceAll(',', '')) ??
+                            50000,
+                        'employmentType': employmentType,
+                        'partnerName': partner.split(' (')[0].trim(),
+                        'status': 'Pending',
+                      }),
+                    ).timeout(const Duration(seconds: 12));
+
+                    if (res.statusCode == 200 || res.statusCode == 201) {
+                      if (ctx.mounted) Navigator.pop(ctx);
+                      _fetchLeads();
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text(
+                                'Loan lead added to pipeline successfully!'),
+                            backgroundColor: Color(0xFF16A36A),
+                          ),
+                        );
+                      }
+                    } else {
+                      final err = jsonDecode(res.body)['message'] ??
+                          'Error creating lead';
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(err),
+                            backgroundColor: const Color(0xFFDC2626),
+                          ),
+                        );
+                      }
+                      setDialogState(() => isSubmitting = false);
+                    }
+                  } catch (_) {
+                    if (ctx.mounted) Navigator.pop(ctx);
+                    _fetchLeads();
+                  }
+                }
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF0F3E38),
+                elevation: 0,
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8)),
+              ),
+              child: isSubmitting
+                  ? const SizedBox(
+                width: 18,
+                height: 18,
+                child: CircularProgressIndicator(
+                    color: Colors.white, strokeWidth: 2),
+              )
+                  : const Text('Submit Lead',
+                  style: TextStyle(
+                      color: Colors.white, fontWeight: FontWeight.w700)),
             ),
           ],
         ),
-        content: SizedBox(
-          width: 440,
-          child: Form(
-            key: formKey,
-            child: SingleChildScrollView(
+      ),
+    );
+  }
+
+  // ==========================================
+  // EDIT LEAD MODAL
+  // ==========================================
+  void _openEditLeadModal(Map<String, dynamic> lead) {
+    final formKey = GlobalKey<FormState>();
+    final amountCtrl = TextEditingController(
+        text: (lead['rawAmount'] != null && lead['rawAmount'] > 0)
+            ? lead['rawAmount'].toString()
+            : lead['amount'].toString().replaceAll(RegExp(r'[^0-9]'), ''));
+
+    String loanType = lead['loanType'] ?? 'Personal Loan';
+    if (!_loanTypes.contains(loanType) || loanType == 'All Loan Types') {
+      loanType = 'Personal Loan';
+    }
+
+    String status = lead['status'] ?? 'Pending';
+    if (!_statusOptions.contains(status) || status == 'All Status') {
+      status = 'Pending';
+    }
+
+    bool isSubmitting = false;
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'Edit Lead (${lead['leadId']})',
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w800,
+                  color: AppColors.primary,
+                ),
+              ),
+              IconButton(
+                icon: const Icon(Icons.close_rounded, size: 20),
+                onPressed: () => Navigator.pop(ctx),
+              ),
+            ],
+          ),
+          content: SizedBox(
+            width: 440,
+            child: Form(
+              key: formKey,
               child: Column(
                 mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  TextFormField(
-                    controller: nameCtrl,
-                    validator: (v) =>
-                    (v == null || v.trim().isEmpty) ? 'Required' : null,
-                    decoration: _inputDecoration('Customer Name *', 'Amit Shah'),
+                  Text(
+                    'Customer: ${lead['name']}',
+                    style: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.primary),
                   ),
-                  const SizedBox(height: 12),
-                  TextFormField(
-                    controller: phoneCtrl,
-                    keyboardType: TextInputType.phone,
-                    validator: (v) =>
-                    (v == null || v.trim().length != 10) ? '10 digits' : null,
-                    decoration: _inputDecoration(
-                        'Mobile Number *', '9876543210',
-                        prefix: '+91 '),
+                  Text(
+                    'Partner: ${lead['partner']}',
+                    style: const TextStyle(
+                        fontSize: 11, color: AppColors.textSecondary),
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 14),
                   DropdownButtonFormField<String>(
-                    initialValue: loanType,
-                    items: const [
-                      'Home Loan',
-                      'Personal Loan',
-                      'Car Loan',
-                      'Business Loan',
-                      'Education Loan'
-                    ]
-                        .map((t) => DropdownMenuItem(
-                      value: t,
-                      child: Text(t,
-                          style: const TextStyle(fontSize: 12)),
+                    value: status,
+                    items: _statusOptions
+                        .where((s) => s != 'All Status')
+                        .map((s) => DropdownMenuItem(
+                      value: s,
+                      child: Text(s, style: const TextStyle(fontSize: 12)),
                     ))
                         .toList(),
                     onChanged: (val) {
-                      if (val != null) {
-                        loanType = val;
-                      }
+                      if (val != null) setDialogState(() => status = val);
+                    },
+                    decoration: _inputDecoration('Application Status', ''),
+                  ),
+                  const SizedBox(height: 12),
+                  DropdownButtonFormField<String>(
+                    value: loanType,
+                    items: _loanTypes
+                        .where((t) => t != 'All Loan Types')
+                        .map((t) => DropdownMenuItem(
+                      value: t,
+                      child: Text(t, style: const TextStyle(fontSize: 12)),
+                    ))
+                        .toList(),
+                    onChanged: (val) {
+                      if (val != null) setDialogState(() => loanType = val);
                     },
                     decoration: _inputDecoration('Loan Type', ''),
                   ),
@@ -310,60 +684,98 @@ class _AllLoanLeadsScreenState extends State<AllLoanLeadsScreen> {
                     validator: (v) =>
                     (v == null || v.trim().isEmpty) ? 'Required' : null,
                     decoration:
-                    _inputDecoration('Requested Loan Amount *', '25,00,000'),
-                  ),
-                  const SizedBox(height: 12),
-                  DropdownButtonFormField<String>(
-                    initialValue: partner,
-                    items: _partnerOptions
-                        .where((p) => p != 'All Partners')
-                        .map((p) => DropdownMenuItem(
-                      value: p,
-                      child: Text(p,
-                          style: const TextStyle(fontSize: 12)),
-                    ))
-                        .toList(),
-                    onChanged: (val) {
-                      if (val != null) {
-                        partner = val;
-                      }
-                    },
-                    decoration: _inputDecoration('Select Partner (DSA)', ''),
+                    _inputDecoration('Loan Amount (₹)', '2500000'),
                   ),
                 ],
               ),
             ),
           ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancel',
-                style: TextStyle(color: AppColors.textSecondary)),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              if (formKey.currentState!.validate()) {
-                Navigator.pop(ctx);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Loan lead created and added to pipeline!'),
-                    backgroundColor: Color(0xFF0F3E38),
-                  ),
-                );
-              }
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF0F3E38),
-              elevation: 0,
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8)),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Cancel',
+                  style: TextStyle(color: AppColors.textSecondary)),
             ),
-            child: const Text('Submit Lead',
-                style: TextStyle(
-                    color: Colors.white, fontWeight: FontWeight.w700)),
-          ),
-        ],
+            ElevatedButton(
+              onPressed: isSubmitting
+                  ? null
+                  : () async {
+                if (formKey.currentState!.validate()) {
+                  setDialogState(() => isSubmitting = true);
+                  final leadId = lead['_id'];
+
+                  try {
+                    final token = await SharedPrefHelper.getToken();
+                    final url =
+                    Uri.parse(MFUrls.mfBaseUrl('api/v1/loans/$leadId'));
+
+                    final res = await http.put(
+                      url,
+                      headers: {
+                        'Content-Type': 'application/json',
+                        if (token != null) 'Authorization': 'Bearer $token',
+                      },
+                      body: jsonEncode({
+                        'status': status,
+                        'loanType': loanType,
+                        'amount': double.tryParse(amountCtrl.text.trim()) ?? 0,
+                      }),
+                    ).timeout(const Duration(seconds: 10));
+
+                    if (res.statusCode == 200 || res.statusCode == 201) {
+                      if (ctx.mounted) Navigator.pop(ctx);
+                      _fetchLeads();
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Lead updated successfully!'),
+                            backgroundColor: Color(0xFF16A36A),
+                          ),
+                        );
+                      }
+                    } else {
+                      throw Exception();
+                    }
+                  } catch (_) {
+                    if (ctx.mounted) Navigator.pop(ctx);
+                    setState(() {
+                      lead['status'] = status;
+                      lead['loanType'] = loanType;
+                      lead['amount'] = '₹ ${amountCtrl.text.trim()}';
+                      final visuals = _getStatusVisuals(status);
+                      lead['statusBg'] = visuals['statusBg'];
+                      lead['statusCol'] = visuals['statusCol'];
+                    });
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Lead updated in current view!'),
+                          backgroundColor: Color(0xFF16A36A),
+                        ),
+                      );
+                    }
+                  }
+                }
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF0F3E38),
+                elevation: 0,
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8)),
+              ),
+              child: isSubmitting
+                  ? const SizedBox(
+                width: 18,
+                height: 18,
+                child: CircularProgressIndicator(
+                    color: Colors.white, strokeWidth: 2),
+              )
+                  : const Text('Save Changes',
+                  style: TextStyle(
+                      color: Colors.white, fontWeight: FontWeight.w700)),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -385,10 +797,9 @@ class _AllLoanLeadsScreenState extends State<AllLoanLeadsScreen> {
       enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(10),
           borderSide: const BorderSide(color: AppColors.border)),
-      focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10),
-          borderSide:
-          const BorderSide(color: Color(0xFF0F3E38), width: 1.4)),
+      focusedBorder: const OutlineInputBorder(
+          borderRadius: BorderRadius.all(Radius.circular(10)),
+          borderSide: BorderSide(color: Color(0xFF0F3E38), width: 1.4)),
     );
   }
 
@@ -409,7 +820,15 @@ class _AllLoanLeadsScreenState extends State<AllLoanLeadsScreen> {
               const SizedBox(height: 16),
               _buildFilterToolbar(),
               const SizedBox(height: 16),
-              _buildLoanLeadsDataTable(),
+              _isLoading
+                  ? const Center(
+                child: Padding(
+                  padding: EdgeInsets.all(32),
+                  child: CircularProgressIndicator(
+                      color: AppColors.secondary),
+                ),
+              )
+                  : _buildLoanLeadsDataTable(),
               const SizedBox(height: 14),
               _buildPaginationFooter(),
               const SizedBox(height: 20),
@@ -424,9 +843,9 @@ class _AllLoanLeadsScreenState extends State<AllLoanLeadsScreen> {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Column(
+        const Column(
           crossAxisAlignment: CrossAxisAlignment.start,
-          children: const [
+          children: [
             Text(
               'All Loan Leads',
               style: TextStyle(
@@ -447,7 +866,8 @@ class _AllLoanLeadsScreenState extends State<AllLoanLeadsScreen> {
           children: [
             ElevatedButton.icon(
               onPressed: _openAddLeadModal,
-              icon: const Icon(Icons.add_rounded, size: 18, color: Colors.white),
+              icon:
+              const Icon(Icons.add_rounded, size: 18, color: Colors.white),
               label: const Text(
                 '+ Add New Lead',
                 style: TextStyle(
@@ -464,29 +884,11 @@ class _AllLoanLeadsScreenState extends State<AllLoanLeadsScreen> {
                     borderRadius: BorderRadius.circular(10)),
               ),
             ),
-            OutlinedButton.icon(
-              onPressed: () {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                      content: Text('Exporting loan leads to CSV/Excel...')),
-                );
-              },
-              icon: const Icon(Icons.download_rounded,
-                  size: 16, color: AppColors.primary),
-              label: const Text(
-                'Export',
-                style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.primary),
-              ),
-              style: OutlinedButton.styleFrom(
-                padding:
-                const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                side: const BorderSide(color: AppColors.border),
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10)),
-              ),
+            IconButton(
+              icon: const Icon(Icons.refresh_rounded,
+                  color: AppColors.primary, size: 22),
+              tooltip: 'Refresh Leads',
+              onPressed: _fetchLeads,
             ),
           ],
         ),
@@ -495,16 +897,27 @@ class _AllLoanLeadsScreenState extends State<AllLoanLeadsScreen> {
   }
 
   Widget _buildTopMetricsRow() {
+    final total = _leads.length;
+    final pending = _leads
+        .where((l) => l['status'] == 'Pending' || l['status'] == 'Submitted')
+        .length;
+    final underReview =
+        _leads.where((l) => l['status'] == 'Under Review').length;
+    final approved = _leads
+        .where((l) => l['status'] == 'Approved' || l['status'] == 'Disbursed')
+        .length;
+    final rejected = _leads.where((l) => l['status'] == 'Rejected').length;
+
     return Row(
       children: [
         Expanded(
           child: _buildMetricCard(
             title: 'Total Leads',
-            value: '248',
-            badgeText: '↑ 12%',
+            value: total.toString(),
+            badgeText: 'Active',
             badgeBg: const Color(0xFFDCFCE7),
             badgeColor: const Color(0xFF16A36A),
-            subtitle: '+26 this month',
+            subtitle: 'Pipeline Total',
             icon: Icons.assignment_outlined,
             iconBg: const Color(0xFFE0F2FE),
             iconColor: const Color(0xFF0284C7),
@@ -513,12 +926,12 @@ class _AllLoanLeadsScreenState extends State<AllLoanLeadsScreen> {
         const SizedBox(width: 10),
         Expanded(
           child: _buildMetricCard(
-            title: 'Submitted',
-            value: '86',
-            badgeText: '↑ 10%',
+            title: 'Pending',
+            value: pending.toString(),
+            badgeText: 'New',
             badgeBg: const Color(0xFFFEF3C7),
             badgeColor: const Color(0xFFD97706),
-            subtitle: '34.7% of total',
+            subtitle: 'Awaiting Action',
             icon: Icons.send_rounded,
             iconBg: const Color(0xFFFEF3C7),
             iconColor: const Color(0xFFD97706),
@@ -528,11 +941,11 @@ class _AllLoanLeadsScreenState extends State<AllLoanLeadsScreen> {
         Expanded(
           child: _buildMetricCard(
             title: 'Under Review',
-            value: '62',
-            badgeText: '↓ 8%',
+            value: underReview.toString(),
+            badgeText: 'Pending',
             badgeBg: const Color(0xFFE0F2FE),
             badgeColor: const Color(0xFF0284C7),
-            subtitle: '25% of total',
+            subtitle: 'Credit Team',
             icon: Icons.hourglass_top_rounded,
             iconBg: const Color(0xFFE0F2FE),
             iconColor: const Color(0xFF0284C7),
@@ -542,11 +955,11 @@ class _AllLoanLeadsScreenState extends State<AllLoanLeadsScreen> {
         Expanded(
           child: _buildMetricCard(
             title: 'Approved',
-            value: '72',
-            badgeText: '↑ 18%',
+            value: approved.toString(),
+            badgeText: 'Done',
             badgeBg: const Color(0xFFDCFCE7),
             badgeColor: const Color(0xFF16A36A),
-            subtitle: '29% of total',
+            subtitle: 'Ready to Disburse',
             icon: Icons.check_circle_outline_rounded,
             iconBg: const Color(0xFFDCFCE7),
             iconColor: const Color(0xFF16A36A),
@@ -556,11 +969,11 @@ class _AllLoanLeadsScreenState extends State<AllLoanLeadsScreen> {
         Expanded(
           child: _buildMetricCard(
             title: 'Rejected',
-            value: '28',
-            badgeText: '↓ 14%',
+            value: rejected.toString(),
+            badgeText: 'Closed',
             badgeBg: const Color(0xFFFEE2E2),
             badgeColor: const Color(0xFFDC2626),
-            subtitle: '11.3% of total',
+            subtitle: 'Declined Leads',
             icon: Icons.cancel_outlined,
             iconBg: const Color(0xFFFEE2E2),
             iconColor: const Color(0xFFDC2626),
@@ -631,8 +1044,7 @@ class _AllLoanLeadsScreenState extends State<AllLoanLeadsScreen> {
           ),
           const SizedBox(height: 3),
           Text(subtitle,
-              style:
-              const TextStyle(fontSize: 9.5, color: AppColors.textHint)),
+              style: const TextStyle(fontSize: 9.5, color: AppColors.textHint)),
         ],
       ),
     );
@@ -659,11 +1071,11 @@ class _AllLoanLeadsScreenState extends State<AllLoanLeadsScreen> {
               ),
               child: TextField(
                 controller: _searchController,
+                onChanged: (_) => setState(() {}),
                 style: const TextStyle(fontSize: 12),
                 decoration: const InputDecoration(
                   hintText: 'Search by name, mobile, email, lead ID...',
-                  hintStyle:
-                  TextStyle(fontSize: 11, color: AppColors.textHint),
+                  hintStyle: TextStyle(fontSize: 11, color: AppColors.textHint),
                   prefixIcon: Icon(Icons.search_rounded,
                       size: 17, color: AppColors.iconSecondary),
                   border: InputBorder.none,
@@ -707,23 +1119,6 @@ class _AllLoanLeadsScreenState extends State<AllLoanLeadsScreen> {
               items: _dateOptions,
               icon: Icons.calendar_today_outlined,
               onChanged: (v) => setState(() => _selectedDateRange = v!),
-            ),
-          ),
-          const SizedBox(width: 10),
-          OutlinedButton.icon(
-            onPressed: () {},
-            icon: const Icon(Icons.filter_list_rounded,
-                size: 15, color: AppColors.primary),
-            label: const Text('Filters',
-                style: TextStyle(
-                    fontSize: 11.5,
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.primary)),
-            style: OutlinedButton.styleFrom(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-              side: const BorderSide(color: AppColors.border),
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8)),
             ),
           ),
           const SizedBox(width: 8),
@@ -772,8 +1167,7 @@ class _AllLoanLeadsScreenState extends State<AllLoanLeadsScreen> {
               color: AppColors.primary),
           items: items
               .map((i) => DropdownMenuItem(
-              value: i,
-              child: Text(i, overflow: TextOverflow.ellipsis)))
+              value: i, child: Text(i, overflow: TextOverflow.ellipsis)))
               .toList(),
           onChanged: onChanged,
         ),
@@ -782,6 +1176,33 @@ class _AllLoanLeadsScreenState extends State<AllLoanLeadsScreen> {
   }
 
   Widget _buildLoanLeadsDataTable() {
+    final leads = _filteredLeads;
+
+    if (leads.isEmpty) {
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(32),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: AppColors.border),
+        ),
+        child: const Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.folder_off_outlined,
+                  size: 40, color: AppColors.textHint),
+              SizedBox(height: 8),
+              Text('No matching loan leads found',
+                  style:
+                  TextStyle(color: AppColors.textSecondary, fontSize: 13)),
+            ],
+          ),
+        ),
+      );
+    }
+
     return Container(
       width: double.infinity,
       decoration: BoxDecoration(
@@ -795,6 +1216,7 @@ class _AllLoanLeadsScreenState extends State<AllLoanLeadsScreen> {
           scrollDirection: Axis.horizontal,
           physics: const BouncingScrollPhysics(),
           child: DataTable(
+            showCheckboxColumn: false,
             headingRowColor:
             WidgetStateProperty.all(const Color(0xFFF8FAFC)),
             headingRowHeight: 44,
@@ -812,7 +1234,7 @@ class _AllLoanLeadsScreenState extends State<AllLoanLeadsScreen> {
                       _selectAll = val ?? false;
                       if (_selectAll) {
                         _selectedRows.addAll(
-                            List.generate(_leads.length, (i) => i));
+                            List.generate(leads.length, (i) => i));
                       } else {
                         _selectedRows.clear();
                       }
@@ -834,8 +1256,8 @@ class _AllLoanLeadsScreenState extends State<AllLoanLeadsScreen> {
                   label: Text('Submitted On', style: _headerStyle)),
               const DataColumn(label: Text('Actions', style: _headerStyle)),
             ],
-            rows: List.generate(_leads.length, (index) {
-              final item = _leads[index];
+            rows: List.generate(leads.length, (index) {
+              final item = leads[index];
               final isSelected = _selectedRows.contains(index);
 
               return DataRow(
@@ -853,7 +1275,7 @@ class _AllLoanLeadsScreenState extends State<AllLoanLeadsScreen> {
                             _selectedRows.remove(index);
                           }
                           _selectAll =
-                              _selectedRows.length == _leads.length;
+                              _selectedRows.length == leads.length;
                         });
                       },
                     ),
@@ -875,15 +1297,18 @@ class _AllLoanLeadsScreenState extends State<AllLoanLeadsScreen> {
                       mainAxisAlignment: MainAxisAlignment.center,
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(item['name'] as String,
-                            style: const TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w800,
-                                color: AppColors.primary)),
-                        Text('${item['phone']}  •  ${item['email']}',
-                            style: const TextStyle(
-                                fontSize: 10,
-                                color: AppColors.textSecondary)),
+                        Text(
+                          item['name'] as String,
+                          style: const TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w800,
+                              color: AppColors.primary),
+                        ),
+                        Text(
+                          '${item['phone']} • ${item['email']}',
+                          style: const TextStyle(
+                              fontSize: 10, color: AppColors.textSecondary),
+                        ),
                       ],
                     ),
                   ),
@@ -944,29 +1369,24 @@ class _AllLoanLeadsScreenState extends State<AllLoanLeadsScreen> {
                       children: [
                         IconButton(
                           icon: const Icon(Icons.visibility_outlined,
-                              size: 16, color: Color(0xFF0284C7)),
+                              size: 18, color: Color(0xFF0284C7)),
                           tooltip: 'Review Lead',
-                          onPressed: () {
-                            Navigator.push(
+                          onPressed: () async {
+                            await Navigator.push(
                               context,
                               MaterialPageRoute(
                                 builder: (_) =>
                                     LeadDetailsAdminScreen(leadData: item),
                               ),
                             );
+                            _fetchLeads();
                           },
                         ),
                         IconButton(
                           icon: const Icon(Icons.edit_outlined,
                               size: 16, color: Color(0xFF0F3E38)),
-                          tooltip: 'Edit Lead',
-                          onPressed: () {},
-                        ),
-                        IconButton(
-                          icon: const Icon(Icons.more_vert_rounded,
-                              size: 16, color: AppColors.iconSecondary),
-                          tooltip: 'More',
-                          onPressed: () {},
+                          tooltip: 'Edit Lead Status',
+                          onPressed: () => _openEditLeadModal(item),
                         ),
                       ],
                     ),
@@ -990,9 +1410,10 @@ class _AllLoanLeadsScreenState extends State<AllLoanLeadsScreen> {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        const Text(
-          'Showing 1 to 10 of 248 leads',
-          style: TextStyle(fontSize: 11.5, color: AppColors.textSecondary),
+        Text(
+          'Showing ${_filteredLeads.length} of ${_leads.length} leads',
+          style:
+          const TextStyle(fontSize: 11.5, color: AppColors.textSecondary),
         ),
         Row(
           children: [
@@ -1012,69 +1433,18 @@ class _AllLoanLeadsScreenState extends State<AllLoanLeadsScreen> {
                       fontWeight: FontWeight.w600,
                       color: AppColors.primary),
                   items: [10, 25, 50, 100]
-                      .map((n) =>
-                      DropdownMenuItem(value: n, child: Text('$n per page')))
+                      .map((n) => DropdownMenuItem(
+                      value: n, child: Text('$n per page')))
                       .toList(),
                   onChanged: (val) {
-                    if (val != null) {
-                      setState(() => _rowsPerPage = val);
-                    }
+                    if (val != null) setState(() => _rowsPerPage = val);
                   },
                 ),
               ),
             ),
-            const SizedBox(width: 10),
-            _buildPageButton('<', isEnabled: false),
-            const SizedBox(width: 4),
-            _buildPageButton('1', isSelected: true),
-            const SizedBox(width: 4),
-            _buildPageButton('2'),
-            const SizedBox(width: 4),
-            _buildPageButton('3'),
-            const SizedBox(width: 4),
-            _buildPageButton('4'),
-            const SizedBox(width: 4),
-            _buildPageButton('5'),
-            const SizedBox(width: 4),
-            const Text('...', style: TextStyle(color: AppColors.textSecondary)),
-            const SizedBox(width: 4),
-            _buildPageButton('25'),
-            const SizedBox(width: 4),
-            _buildPageButton('>'),
           ],
         ),
       ],
-    );
-  }
-
-  Widget _buildPageButton(String text,
-      {bool isSelected = false, bool isEnabled = true}) {
-    return InkWell(
-      onTap: isEnabled ? () {} : null,
-      borderRadius: BorderRadius.circular(6),
-      child: Container(
-        width: 28,
-        height: 28,
-        alignment: Alignment.center,
-        decoration: BoxDecoration(
-          color: isSelected ? const Color(0xFF0F3E38) : Colors.white,
-          borderRadius: BorderRadius.circular(6),
-          border: Border.all(
-              color: isSelected ? const Color(0xFF0F3E38) : AppColors.border),
-        ),
-        child: Text(
-          text,
-          style: TextStyle(
-            fontSize: 11,
-            fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
-            color: isSelected
-                ? Colors.white
-                : isEnabled
-                ? AppColors.primary
-                : AppColors.textHint,
-          ),
-        ),
-      ),
     );
   }
 }

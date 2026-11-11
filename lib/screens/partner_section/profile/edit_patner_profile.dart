@@ -1,8 +1,13 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../../../constants/api_urls.dart';
 import '../../../../constants/app_colors.dart';
 import '../../../../constants/asset_constants.dart';
+import '../../../../core/servicess/shared_pref_helper.dart';
 
 class EditPartnerProfileScreen extends StatefulWidget {
   const EditPartnerProfileScreen({super.key});
@@ -15,35 +20,32 @@ class _EditPartnerProfileScreenState extends State<EditPartnerProfileScreen> {
   final _formKey = GlobalKey<FormState>();
 
   // Personal Information Controllers
-  final _fullNameController = TextEditingController(text: 'Rohan Kumar');
-  final _mobileController = TextEditingController(text: '9876543210');
+  final _fullNameController = TextEditingController();
+  final _mobileController = TextEditingController();
   final _dobController = TextEditingController(text: '12 Jan 1995');
-  final _emailController = TextEditingController(text: 'rohan.kumar@gmail.com');
-  final _altMobileController = TextEditingController(text: '9123456789');
+  final _emailController = TextEditingController();
+  final _altMobileController = TextEditingController();
   String _selectedGender = 'Male';
-  final _currentAddressController = TextEditingController(
-    text: 'B-203, Sector 62, Noida, Uttar Pradesh - 201309',
-  );
+  final _currentAddressController = TextEditingController();
 
   // Business Information Controllers
   final _businessNameController = TextEditingController(text: 'RK Associates');
   String _selectedBusinessType = 'DSA Agent';
-  final _gstController = TextEditingController(text: '27ABCDE1234F1Z5');
+  final _gstController = TextEditingController();
   final _experienceController = TextEditingController(text: '3 Years');
-  final _areaOfOperationController = TextEditingController(text: 'Noida, Delhi, Ghaziabad');
-  final _businessAddressController = TextEditingController(
-    text: 'Office No. 12, Sector 62\nNoida, Uttar Pradesh - 201309',
-  );
+  final _areaOfOperationController = TextEditingController(text: 'Gujarat, India');
+  final _businessAddressController = TextEditingController();
 
   // Bank Details Controllers
-  final _accountHolderController = TextEditingController(text: 'Rohan Kumar');
+  final _accountHolderController = TextEditingController();
   final _bankNameController = TextEditingController(text: 'HDFC Bank');
   final _accountNumberController = TextEditingController(text: '501023456789');
   final _ifscController = TextEditingController(text: 'HDFC0001234');
-  final _upiIdController = TextEditingController(text: 'rohan123@okhdfcbank');
+  final _upiIdController = TextEditingController(text: 'partner@okhdfcbank');
   String _selectedPayoutFrequency = 'Monthly';
 
   bool _isSaving = false;
+  bool _isLoadingInitial = true;
 
   final List<String> _genderOptions = ['Male', 'Female', 'Other'];
   final List<String> _businessTypeOptions = [
@@ -54,6 +56,12 @@ class _EditPartnerProfileScreenState extends State<EditPartnerProfileScreen> {
     'Connector',
   ];
   final List<String> _payoutFrequencyOptions = ['Weekly', 'Bi-Weekly', 'Monthly'];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadInitialUserData();
+  }
 
   @override
   void dispose() {
@@ -76,22 +84,89 @@ class _EditPartnerProfileScreenState extends State<EditPartnerProfileScreen> {
     super.dispose();
   }
 
-  void _handleUpdateProfile() async {
+  Future<void> _loadInitialUserData() async {
+    try {
+      final userData = await SharedPrefHelper.getUserData();
+      if (mounted) {
+        setState(() {
+          _fullNameController.text = userData['name'] ?? '';
+          _mobileController.text = userData['phone'] ?? '';
+          _emailController.text = userData['email'] ?? '';
+          _currentAddressController.text = userData['city'] ?? '';
+          _businessAddressController.text = userData['city'] ?? '';
+          _accountHolderController.text = userData['name'] ?? '';
+          _isLoadingInitial = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) setState(() => _isLoadingInitial = false);
+    }
+  }
+
+  Future<void> _handleUpdateProfile() async {
+    FocusScope.of(context).unfocus();
     if (!_formKey.currentState!.validate()) return;
 
     setState(() => _isSaving = true);
-    await Future.delayed(const Duration(milliseconds: 900));
 
-    if (!mounted) return;
-    setState(() => _isSaving = false);
+    final updatedName = _fullNameController.text.trim();
+    final updatedEmail = _emailController.text.trim().toLowerCase();
+    final updatedCity = _currentAddressController.text.trim();
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Profile information updated successfully!'),
-        backgroundColor: Color(0xFF0F3E38),
-      ),
-    );
-    Navigator.pop(context);
+    try {
+      final token = await SharedPrefHelper.getToken();
+
+      if (token != null) {
+        final url = Uri.parse(MFUrls.mfBaseUrl('api/v1/auth/update-details'));
+        await http.put(
+          url,
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer $token',
+          },
+          body: jsonEncode({
+            'name': updatedName,
+            'email': updatedEmail,
+            'city': updatedCity,
+          }),
+        ).timeout(const Duration(seconds: 12));
+      }
+
+      // Update Local Session Cache
+      final currentData = await SharedPrefHelper.getUserData();
+      currentData['name'] = updatedName;
+      currentData['email'] = updatedEmail;
+      currentData['city'] = updatedCity;
+      // await SharedPrefHelper.saveUserData(currentData);
+
+      // Purani line:
+// await SharedPrefHelper.saveUserData(currentData);
+
+// Nayi line:
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('user_data', jsonEncode(currentData));
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Profile information updated successfully!'),
+          backgroundColor: Color(0xFF16A36A),
+        ),
+      );
+
+      Navigator.pop(context, true);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to update: ${e.toString()}'),
+          backgroundColor: AppColors.error,
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
+    }
   }
 
   @override
@@ -119,23 +194,11 @@ class _EditPartnerProfileScreenState extends State<EditPartnerProfileScreen> {
           ),
         ),
         centerTitle: true,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.notifications_outlined, color: AppColors.primary, size: 22),
-            onPressed: () {},
-          ),
-          Padding(
-            padding: const EdgeInsets.only(right: 14),
-            child: CircleAvatar(
-              radius: 17,
-              backgroundColor: const Color(0xFF0F3E38).withValues(alpha: 0.1),
-              child: const Icon(Icons.person, size: 20, color: Color(0xFF0F3E38)),
-            ),
-          ),
-        ],
       ),
       body: SafeArea(
-        child: SingleChildScrollView(
+        child: _isLoadingInitial
+            ? const Center(child: CircularProgressIndicator(color: AppColors.secondary))
+            : SingleChildScrollView(
           physics: const BouncingScrollPhysics(),
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           child: Form(
@@ -143,7 +206,6 @@ class _EditPartnerProfileScreenState extends State<EditPartnerProfileScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Header Title
                 const Text(
                   'Edit Profile',
                   style: TextStyle(
@@ -154,12 +216,12 @@ class _EditPartnerProfileScreenState extends State<EditPartnerProfileScreen> {
                 ),
                 const SizedBox(height: 3),
                 const Text(
-                  'Update your personal and business information.',
+                  'Update your personal, business and payout details.',
                   style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
                 ),
                 const SizedBox(height: 16),
 
-                // 1. Change Profile Photo Card
+                // 1. Profile Avatar Card
                 _buildChangePhotoCard(),
                 const SizedBox(height: 16),
 
@@ -181,7 +243,7 @@ class _EditPartnerProfileScreenState extends State<EditPartnerProfileScreen> {
                 _buildBankDetailsFields(),
                 const SizedBox(height: 24),
 
-                // Update Profile CTA Button
+                // Update CTA Button
                 SizedBox(
                   width: double.infinity,
                   height: 48,
@@ -189,6 +251,7 @@ class _EditPartnerProfileScreenState extends State<EditPartnerProfileScreen> {
                     onPressed: _isSaving ? null : _handleUpdateProfile,
                     style: ElevatedButton.styleFrom(
                       backgroundColor: const Color(0xFF0F3E38),
+                      disabledBackgroundColor: AppColors.buttonDisabled,
                       elevation: 0,
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
                     ),
@@ -217,7 +280,6 @@ class _EditPartnerProfileScreenState extends State<EditPartnerProfileScreen> {
     );
   }
 
-  // 1. Change Profile Photo Card
   Widget _buildChangePhotoCard() {
     return Container(
       width: double.infinity,
@@ -229,78 +291,23 @@ class _EditPartnerProfileScreenState extends State<EditPartnerProfileScreen> {
       ),
       child: Row(
         children: [
-          Stack(
-            children: [
-              CircleAvatar(
-                radius: 28,
-                backgroundColor: const Color(0xFF0F3E38).withValues(alpha: 0.1),
-                child: const Icon(Icons.person, size: 34, color: Color(0xFF0F3E38)),
-              ),
-              Positioned(
-                right: 0,
-                bottom: 0,
-                child: Container(
-                  padding: const EdgeInsets.all(4),
-                  decoration: const BoxDecoration(
-                    color: Color(0xFF16A36A),
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(Icons.camera_alt, size: 12, color: Colors.white),
-                ),
-              ),
-            ],
+          CircleAvatar(
+            radius: 26,
+            backgroundColor: const Color(0xFF0F3E38).withValues(alpha: 0.1),
+            child: const Icon(Icons.person, size: 30, color: Color(0xFF0F3E38)),
           ),
           const SizedBox(width: 14),
-          Expanded(
+          const Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
-              children: const [
+              children: [
                 Text(
-                  'Change Profile Photo',
-                  style: TextStyle(
-                    fontSize: 13.5,
-                    fontWeight: FontWeight.w800,
-                    color: AppColors.primary,
-                  ),
+                  'Profile Avatar',
+                  style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w800, color: AppColors.primary),
                 ),
                 SizedBox(height: 2),
-                Text(
-                  'JPG, PNG (Max 2 MB)',
-                  style: TextStyle(fontSize: 11, color: AppColors.textSecondary),
-                ),
+                Text('Assigned Channel Partner Profile', style: TextStyle(fontSize: 11, color: AppColors.textSecondary)),
               ],
-            ),
-          ),
-          TextButton(
-            onPressed: () {},
-            style: TextButton.styleFrom(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-              minimumSize: Size.zero,
-              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-            ),
-            child: const Text(
-              'Remove',
-              style: TextStyle(
-                fontSize: 11.5,
-                fontWeight: FontWeight.w700,
-                color: Color(0xFFDC2626),
-              ),
-            ),
-          ),
-          const SizedBox(width: 6),
-          ElevatedButton(
-            onPressed: () {},
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF0F3E38),
-              elevation: 0,
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              minimumSize: Size.zero,
-              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-            ),
-            child: const Text(
-              'Upload Photo',
-              style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: Colors.white),
             ),
           ),
         ],
@@ -308,7 +315,6 @@ class _EditPartnerProfileScreenState extends State<EditPartnerProfileScreen> {
     );
   }
 
-  // Section Title
   Widget _buildSectionHeader(String title) {
     return Text(
       title,
@@ -320,7 +326,6 @@ class _EditPartnerProfileScreenState extends State<EditPartnerProfileScreen> {
     );
   }
 
-  // 2. Personal Information Fields
   Widget _buildPersonalInfoFields() {
     return Column(
       children: [
@@ -338,14 +343,10 @@ class _EditPartnerProfileScreenState extends State<EditPartnerProfileScreen> {
               child: TextFormField(
                 controller: _mobileController,
                 keyboardType: TextInputType.phone,
-                inputFormatters: [
-                  FilteringTextInputFormatter.digitsOnly,
-                  LengthLimitingTextInputFormatter(10),
-                ],
-                validator: (v) => (v == null || v.trim().length != 10) ? '10 digits' : null,
+                readOnly: true, // Phone is primary login identifier
                 decoration: _inputDecoration(
-                  label: 'Mobile Number *',
-                  hint: '9876543210',
+                  label: 'Registered Phone',
+                  hint: 'Mobile Number',
                   prefixText: '+91 ',
                 ),
               ),
@@ -355,39 +356,12 @@ class _EditPartnerProfileScreenState extends State<EditPartnerProfileScreen> {
         const SizedBox(height: 12),
         Row(
           children: [
-            Expanded(
-              child: TextFormField(
-                controller: _dobController,
-                decoration: _inputDecoration(label: 'Date of Birth', hint: '12 Jan 1995'),
-              ),
-            ),
-            const SizedBox(width: 10),
             Expanded(
               child: TextFormField(
                 controller: _emailController,
                 keyboardType: TextInputType.emailAddress,
                 validator: (v) => (v == null || !v.contains('@')) ? 'Invalid email' : null,
                 decoration: _inputDecoration(label: 'Email Address *', hint: 'email@example.com'),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 12),
-        Row(
-          children: [
-            Expanded(
-              child: TextFormField(
-                controller: _altMobileController,
-                keyboardType: TextInputType.phone,
-                inputFormatters: [
-                  FilteringTextInputFormatter.digitsOnly,
-                  LengthLimitingTextInputFormatter(10),
-                ],
-                decoration: _inputDecoration(
-                  label: 'Alternate Number',
-                  hint: '9123456789',
-                  prefixText: '+91 ',
-                ),
               ),
             ),
             const SizedBox(width: 10),
@@ -408,15 +382,13 @@ class _EditPartnerProfileScreenState extends State<EditPartnerProfileScreen> {
         const SizedBox(height: 12),
         TextFormField(
           controller: _currentAddressController,
-          maxLines: 2,
           validator: (v) => (v == null || v.trim().isEmpty) ? 'Required' : null,
-          decoration: _inputDecoration(label: 'Current Address *', hint: 'Enter current residential address'),
+          decoration: _inputDecoration(label: 'City / Address *', hint: 'Enter city or region'),
         ),
       ],
     );
   }
 
-  // 3. Business Information Fields
   Widget _buildBusinessInfoFields() {
     return Column(
       children: [
@@ -425,15 +397,14 @@ class _EditPartnerProfileScreenState extends State<EditPartnerProfileScreen> {
             Expanded(
               child: TextFormField(
                 controller: _businessNameController,
-                validator: (v) => (v == null || v.trim().isEmpty) ? 'Required' : null,
-                decoration: _inputDecoration(label: 'Business Name *', hint: 'Enter business name'),
+                decoration: _inputDecoration(label: 'Agency / Business Name', hint: 'Enter agency name'),
               ),
             ),
             const SizedBox(width: 10),
             Expanded(
               child: DropdownButtonFormField<String>(
                 value: _selectedBusinessType,
-                decoration: _inputDecoration(label: 'Business Type', hint: 'Select type'),
+                decoration: _inputDecoration(label: 'Partner Role', hint: 'Select role'),
                 items: _businessTypeOptions
                     .map((b) => DropdownMenuItem(value: b, child: Text(b, style: const TextStyle(fontSize: 12))))
                     .toList(),
@@ -445,42 +416,14 @@ class _EditPartnerProfileScreenState extends State<EditPartnerProfileScreen> {
           ],
         ),
         const SizedBox(height: 12),
-        Row(
-          children: [
-            Expanded(
-              child: TextFormField(
-                controller: _gstController,
-                textCapitalization: TextCapitalization.characters,
-                decoration: _inputDecoration(label: 'GST Number', hint: '27ABCDE1234F1Z5'),
-              ),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: TextFormField(
-                controller: _experienceController,
-                decoration: _inputDecoration(label: 'Years of Experience', hint: 'e.g. 3 Years'),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 12),
         TextFormField(
           controller: _areaOfOperationController,
-          validator: (v) => (v == null || v.trim().isEmpty) ? 'Required' : null,
-          decoration: _inputDecoration(label: 'Area of Operation *', hint: 'Noida, Delhi, Ghaziabad'),
-        ),
-        const SizedBox(height: 12),
-        TextFormField(
-          controller: _businessAddressController,
-          maxLines: 2,
-          validator: (v) => (v == null || v.trim().isEmpty) ? 'Required' : null,
-          decoration: _inputDecoration(label: 'Business Address *', hint: 'Enter complete office address'),
+          decoration: _inputDecoration(label: 'Area of Operation', hint: 'e.g. Ahmedabad, Surat'),
         ),
       ],
     );
   }
 
-  // 4. Bank Details Fields
   Widget _buildBankDetailsFields() {
     return Column(
       children: [
@@ -489,15 +432,14 @@ class _EditPartnerProfileScreenState extends State<EditPartnerProfileScreen> {
             Expanded(
               child: TextFormField(
                 controller: _accountHolderController,
-                validator: (v) => (v == null || v.trim().isEmpty) ? 'Required' : null,
-                decoration: _inputDecoration(label: 'Account Holder Name *', hint: 'Rohan Kumar'),
+                decoration: _inputDecoration(label: 'Beneficiary Name', hint: 'Account Holder Name'),
               ),
             ),
             const SizedBox(width: 10),
             Expanded(
               child: TextFormField(
                 controller: _bankNameController,
-                decoration: _inputDecoration(label: 'Bank Name', hint: 'HDFC Bank'),
+                decoration: _inputDecoration(label: 'Bank Name', hint: 'e.g. HDFC Bank'),
               ),
             ),
           ],
@@ -509,8 +451,7 @@ class _EditPartnerProfileScreenState extends State<EditPartnerProfileScreen> {
               child: TextFormField(
                 controller: _accountNumberController,
                 keyboardType: TextInputType.number,
-                validator: (v) => (v == null || v.trim().isEmpty) ? 'Required' : null,
-                decoration: _inputDecoration(label: 'Account Number *', hint: '5010 2345 6789'),
+                decoration: _inputDecoration(label: 'Account Number', hint: 'Bank Account No'),
               ),
             ),
             const SizedBox(width: 10),
@@ -518,8 +459,7 @@ class _EditPartnerProfileScreenState extends State<EditPartnerProfileScreen> {
               child: TextFormField(
                 controller: _ifscController,
                 textCapitalization: TextCapitalization.characters,
-                validator: (v) => (v == null || v.trim().isEmpty) ? 'Required' : null,
-                decoration: _inputDecoration(label: 'IFSC Code *', hint: 'HDFC0001234'),
+                decoration: _inputDecoration(label: 'IFSC Code', hint: 'HDFC0001234'),
               ),
             ),
           ],
@@ -530,14 +470,14 @@ class _EditPartnerProfileScreenState extends State<EditPartnerProfileScreen> {
             Expanded(
               child: TextFormField(
                 controller: _upiIdController,
-                decoration: _inputDecoration(label: 'UPI ID', hint: 'rohan123@okhdfcbank'),
+                decoration: _inputDecoration(label: 'UPI ID for Payout', hint: 'partner@upi'),
               ),
             ),
             const SizedBox(width: 10),
             Expanded(
               child: DropdownButtonFormField<String>(
                 value: _selectedPayoutFrequency,
-                decoration: _inputDecoration(label: 'Payout Frequency', hint: 'Select'),
+                decoration: _inputDecoration(label: 'Payout Cycle', hint: 'Select'),
                 items: _payoutFrequencyOptions
                     .map((p) => DropdownMenuItem(value: p, child: Text(p, style: const TextStyle(fontSize: 12))))
                     .toList(),

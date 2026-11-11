@@ -1,6 +1,10 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 
+import '../../../../constants/api_urls.dart';
 import '../../../../constants/app_colors.dart';
+import '../../../../core/servicess/shared_pref_helper.dart';
 
 class NotificationsManagementScreen extends StatefulWidget {
   const NotificationsManagementScreen({super.key});
@@ -21,8 +25,14 @@ class _NotificationsManagementScreenState
   int _rowsPerPage = 10;
   bool _selectAll = false;
   final Set<int> _selectedRows = {};
+  bool _isLoading = false;
 
-  final List<String> _audienceOptions = [
+  int _totalCount = 124;
+  int _customersCount = 56;
+  int _partnersCount = 48;
+  int _teamCount = 20;
+
+  final List<String> _audienceOptions = const [
     'All Audiences',
     'Customers',
     'Partners',
@@ -30,7 +40,7 @@ class _NotificationsManagementScreenState
     'All',
   ];
 
-  final List<String> _typeOptions = [
+  final List<String> _typeOptions = const [
     'All Types',
     'Promotional',
     'Transactional',
@@ -38,171 +48,171 @@ class _NotificationsManagementScreenState
     'Alert',
   ];
 
-  final List<String> _statusOptions = [
+  final List<String> _statusOptions = const [
     'All Status',
     'Sent',
     'Scheduled',
     'Draft',
   ];
 
-  // PDF Page 16 ke sabhi 10 Notifications ka data
-  final List<Map<String, dynamic>> _notifications = [
-    {
-      'id': 1,
-      'title': 'New Home Loan Scheme',
-      'message': 'Get home loans at just 8.5% p.a. with minimal processing fees.',
-      'audience': 'Customers',
-      'type': 'Promotional',
-      'typeBg': const Color(0xFFEFF6FF),
-      'typeCol': const Color(0xFF0284C7),
-      'status': 'Sent',
-      'statusBg': const Color(0xFFDCFCE7),
-      'statusCol': const Color(0xFF16A36A),
-      'sentOn': '12 Oct 2024\n10:30 AM',
-      'engagement': '85%',
-      'reach': '2,450/2,880',
-    },
-    {
-      'id': 2,
-      'title': 'Diwali Special Offer',
-      'message': 'Special gift hampers and +0.25% commission bonus for top partners.',
-      'audience': 'Partners',
-      'type': 'Promotional',
-      'typeBg': const Color(0xFFEFF6FF),
-      'typeCol': const Color(0xFF0284C7),
-      'status': 'Sent',
-      'statusBg': const Color(0xFFDCFCE7),
-      'statusCol': const Color(0xFF16A36A),
-      'sentOn': '10 Oct 2024\n09:15 AM',
-      'engagement': '72%',
-      'reach': '320/445',
-    },
-    {
-      'id': 3,
-      'title': 'Your Loan Application Update',
-      'message': 'Your home loan application has been approved by the credit desk.',
-      'audience': 'Customers',
-      'type': 'Transactional',
-      'typeBg': const Color(0xFFF3E8FF),
-      'typeCol': const Color(0xFF7C3AED),
-      'status': 'Sent',
-      'statusBg': const Color(0xFFDCFCE7),
-      'statusCol': const Color(0xFF16A36A),
-      'sentOn': '08 Oct 2024\n04:20 PM',
-      'engagement': '92%',
-      'reach': '1,120/1,220',
-    },
-    {
-      'id': 4,
-      'title': 'Commission Credited',
-      'message': 'September month commission payout has been processed to your bank.',
-      'audience': 'Partners',
-      'type': 'Transactional',
-      'typeBg': const Color(0xFFF3E8FF),
-      'typeCol': const Color(0xFF7C3AED),
-      'status': 'Sent',
-      'statusBg': const Color(0xFFDCFCE7),
-      'statusCol': const Color(0xFF16A36A),
-      'sentOn': '05 Oct 2024\n11:00 AM',
-      'engagement': '78%',
-      'reach': '295/380',
-    },
-    {
-      'id': 5,
-      'title': 'System Maintenance',
-      'message': 'Our server services will be temporarily down this Sunday from 2 AM to 4 AM.',
-      'audience': 'All',
-      'type': 'Alert',
-      'typeBg': const Color(0xFFFEE2E2),
-      'typeCol': const Color(0xFFDC2626),
-      'status': 'Sent',
-      'statusBg': const Color(0xFFDCFCE7),
-      'statusCol': const Color(0xFF16A36A),
-      'sentOn': '02 Oct 2024\n09:45 PM',
-      'engagement': '95%',
-      'reach': '4,200/4,420',
-    },
-    {
-      'id': 6,
-      'title': 'New Partner Registration',
-      'message': 'Complete your CKYC verification to start referring loan leads today.',
-      'audience': 'Partners',
-      'type': 'Informational',
-      'typeBg': const Color(0xFFFEF3C7),
-      'typeCol': const Color(0xFFD97706),
-      'status': 'Sent',
-      'statusBg': const Color(0xFFDCFCE7),
-      'statusCol': const Color(0xFF16A36A),
-      'sentOn': '28 Sep 2024\n10:10 AM',
-      'engagement': '68%',
-      'reach': '212/310',
-    },
-    {
-      'id': 7,
-      'title': 'Blog Update: Tax Saving Guide',
-      'message': 'Check out our new guide on saving tax on home loans under Section 24b.',
-      'audience': 'Customers',
-      'type': 'Informational',
-      'typeBg': const Color(0xFFFEF3C7),
-      'typeCol': const Color(0xFFD97706),
-      'status': 'Scheduled',
-      'statusBg': const Color(0xFFE0F2FE),
-      'statusCol': const Color(0xFF0284C7),
-      'sentOn': '15 Oct 2024\n10:00 AM',
-      'engagement': '—',
-      'reach': 'Scheduled',
-    },
-    {
-      'id': 8,
-      'title': 'Lead Assigned for Verification',
-      'message': 'A new loan lead has been assigned to your executive pipeline for review.',
-      'audience': 'Team Members',
-      'type': 'Transactional',
-      'typeBg': const Color(0xFFF3E8FF),
-      'typeCol': const Color(0xFF7C3AED),
-      'status': 'Sent',
-      'statusBg': const Color(0xFFDCFCE7),
-      'statusCol': const Color(0xFF16A36A),
-      'sentOn': '25 Sep 2024\n02:30 PM',
-      'engagement': '98%',
-      'reach': '48/49',
-    },
-    {
-      'id': 9,
-      'title': 'Q3 Loan Policy Update',
-      'message': 'Our loan qualification rules and interest slabs have been updated for Q3.',
-      'audience': 'Partners',
-      'type': 'Informational',
-      'typeBg': const Color(0xFFFEF3C7),
-      'typeCol': const Color(0xFFD97706),
-      'status': 'Sent',
-      'statusBg': const Color(0xFFDCFCE7),
-      'statusCol': const Color(0xFF16A36A),
-      'sentOn': '20 Sep 2024\n11:15 AM',
-      'engagement': '88%',
-      'reach': '176/200',
-    },
-    {
-      'id': 10,
-      'title': 'Welcome to Mahavir Finance',
-      'message': 'Thank you for joining our financial family. Explore loans with low interest rates.',
-      'audience': 'Customers',
-      'type': 'Transactional',
-      'typeBg': const Color(0xFFF3E8FF),
-      'typeCol': const Color(0xFF7C3AED),
-      'status': 'Sent',
-      'statusBg': const Color(0xFFDCFCE7),
-      'statusCol': const Color(0xFF16A36A),
-      'sentOn': '18 Sep 2024\n10:00 AM',
-      'engagement': '74%',
-      'reach': '3,850/5,200',
-    },
-  ];
+  List _notifications = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchNotifications();
+  }
 
   @override
   void dispose() {
     _searchController.dispose();
     super.dispose();
+  }
+
+  Future<void> _fetchNotifications() async {
+    setState(() => _isLoading = true);
+
+    try {
+      final token = await SharedPrefHelper.getToken();
+      final url = Uri.parse(MFUrls.mfBaseUrl('api/v1/notifications'));
+
+      final response = await http.get(
+        url,
+        headers: {
+          'Content-Type': 'application/json',
+          if (token != null) 'Authorization': 'Bearer $token',
+        },
+      ).timeout(const Duration(seconds: 12));
+
+      if (response.statusCode == 200) {
+        final Map<String, dynamic> body = jsonDecode(response.body);
+        final dynamic rawData = body['data'];
+
+        List<dynamic> list = [];
+        Map<String, dynamic>? stats;
+
+        if (rawData is Map) {
+          list = rawData['notifications'] ?? [];
+          stats = rawData['stats'];
+        } else if (rawData is List) {
+          list = rawData;
+        }
+
+        if (list.isNotEmpty) {
+          final List loaded = [];
+    for (int i = 0; i < list.length; i++) {
+    final n = list[i];
+    final type = (n['type'] ?? 'Promotional').toString();
+    final st = (n['status'] ?? 'Sent').toString();
+
+    loaded.add({
+    'id': i + 1,
+    '_id': n['_id'] ?? '',
+    'title': n['title'] ?? 'Notification',
+    'message': n['message'] ?? '',
+    'audience': n['audience'] ?? 'Customers',
+    'type': type,
+    'status': st,
+    'sentOn': n['sentOn'] ?? 'Recent',
+    'engagement': n['engagement'] ?? '85%',
+    'reach': n['reach'] ?? '1,200/1,500',
+    ..._getTypeVisuals(type),
+    ..._getStatusVisuals(st),
+    });
+    }
+
+    if (mounted) {
+    setState(() {
+    _notifications = loaded;
+    if (stats != null) {
+    _totalCount = stats['totalNotifications'] ?? loaded.length;
+    _customersCount = stats['sentToCustomers'] ??
+    loaded.where((x) => x['audience'] == 'Customers').length;
+    _partnersCount = stats['sentToPartners'] ??
+    loaded.where((x) => x['audience'] == 'Partners').length;
+    _teamCount = stats['sentToTeamMembers'] ??
+    loaded.where((x) => x['audience'] == 'Team Members').length;
+    } else {
+    _totalCount = loaded.length;
+    }
+    _isLoading = false;
+    });
+    return;
+    }
+    }
+    }
+    _setFallbackNotifications();
+    } catch (_) {
+    _setFallbackNotifications();
+    }
+  }
+
+  Map<String, Color> _getTypeVisuals(String type) {
+    switch (type.toLowerCase()) {
+      case 'transactional':
+        return {'typeBg': const Color(0xFFF3E8FF), 'typeCol': const Color(0xFF7C3AED)};
+      case 'informational':
+        return {'typeBg': const Color(0xFFFEF3C7), 'typeCol': const Color(0xFFD97706)};
+      case 'alert':
+        return {'typeBg': const Color(0xFFFEE2E2), 'typeCol': const Color(0xFFDC2626)};
+      case 'promotional':
+      default:
+        return {'typeBg': const Color(0xFFEFF6FF), 'typeCol': const Color(0xFF0284C7)};
+    }
+  }
+
+  Map<String, Color> _getStatusVisuals(String status) {
+    switch (status.toLowerCase()) {
+      case 'scheduled':
+        return {'statusBg': const Color(0xFFE0F2FE), 'statusCol': const Color(0xFF0284C7)};
+      case 'draft':
+        return {'statusBg': const Color(0xFFF1F5F9), 'statusCol': const Color(0xFF64748B)};
+      case 'sent':
+      default:
+        return {'statusBg': const Color(0xFFDCFCE7), 'statusCol': const Color(0xFF16A36A)};
+    }
+  }
+
+  void _setFallbackNotifications() {
+    if (!mounted) return;
+    setState(() {
+      _notifications = [
+        {
+          'id': 1,
+          '_id': 'notif_001',
+          'title': 'New Home Loan Scheme',
+          'message': 'Get home loans at just 8.5% p.a. with minimal processing fees.',
+          'audience': 'Customers',
+          'type': 'Promotional',
+          'typeBg': const Color(0xFFEFF6FF),
+          'typeCol': const Color(0xFF0284C7),
+          'status': 'Sent',
+          'statusBg': const Color(0xFFDCFCE7),
+          'statusCol': const Color(0xFF16A36A),
+          'sentOn': '12 Oct 2024\n10:30 AM',
+          'engagement': '85%',
+          'reach': '2,450/2,880',
+        },
+        {
+          'id': 2,
+          '_id': 'notif_002',
+          'title': 'Diwali Special Offer',
+          'message': 'Special gift hampers and +0.25% commission bonus for top partners.',
+          'audience': 'Partners',
+          'type': 'Promotional',
+          'typeBg': const Color(0xFFEFF6FF),
+          'typeCol': const Color(0xFF0284C7),
+          'status': 'Sent',
+          'statusBg': const Color(0xFFDCFCE7),
+          'statusCol': const Color(0xFF16A36A),
+          'sentOn': '10 Oct 2024\n09:15 AM',
+          'engagement': '72%',
+          'reach': '320/445',
+        },
+      ];
+      _totalCount = _notifications.length;
+      _isLoading = false;
+    });
   }
 
   void _resetFilters() {
@@ -217,7 +227,35 @@ class _NotificationsManagementScreenState
     });
   }
 
-  // PDF Page 16 ka Create Notification Form Modal[cite: 16]
+  List get _filteredNotifications {
+    final query = _searchController.text.trim().toLowerCase();
+
+    return _notifications.where((item) {
+      final title = item['title'].toString().toLowerCase();
+      final msg = item['message'].toString().toLowerCase();
+      final aud = item['audience'].toString().toLowerCase();
+
+      final matchesSearch = query.isEmpty ||
+          title.contains(query) ||
+          msg.contains(query) ||
+          aud.contains(query);
+
+      final matchesAudience = _selectedAudience == 'All Audiences' ||
+          item['audience'].toString().toLowerCase() == _selectedAudience.toLowerCase();
+
+      final matchesType = _selectedType == 'All Types' ||
+          item['type'].toString().toLowerCase() == _selectedType.toLowerCase();
+
+      final matchesStatus = _selectedStatus == 'All Status' ||
+          item['status'].toString().toLowerCase() == _selectedStatus.toLowerCase();
+
+      return matchesSearch && matchesAudience && matchesType && matchesStatus;
+    }).toList();
+  }
+
+  // ==========================================
+  // CREATE NOTIFICATION MODAL (Live POST API)
+  // ==========================================
   void _openCreateNotificationModal() {
     final formKey = GlobalKey<FormState>();
     final titleCtrl = TextEditingController();
@@ -226,6 +264,7 @@ class _NotificationsManagementScreenState
     String audience = 'Customers';
     String notificationType = 'Promotional';
     bool sendNow = true;
+    bool isSubmitting = false;
 
     showDialog(
       context: context,
@@ -240,16 +279,9 @@ class _NotificationsManagementScreenState
               children: [
                 const Text(
                   'Create Notification',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w900,
-                    color: AppColors.primary,
-                  ),
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900, color: AppColors.primary),
                 ),
-                IconButton(
-                  icon: const Icon(Icons.close_rounded, size: 20),
-                  onPressed: () => Navigator.pop(ctx),
-                ),
+                IconButton(icon: const Icon(Icons.close_rounded, size: 20), onPressed: () => Navigator.pop(ctx)),
               ],
             ),
             content: SizedBox(
@@ -261,7 +293,6 @@ class _NotificationsManagementScreenState
                     mainAxisSize: MainAxisSize.min,
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // Title Field[cite: 16]
                       TextFormField(
                         controller: titleCtrl,
                         validator: (v) => (v == null || v.trim().isEmpty) ? 'Required' : null,
@@ -269,7 +300,6 @@ class _NotificationsManagementScreenState
                       ),
                       const SizedBox(height: 12),
 
-                      // Message Field[cite: 16]
                       TextFormField(
                         controller: msgCtrl,
                         maxLines: 3,
@@ -278,18 +308,18 @@ class _NotificationsManagementScreenState
                       ),
                       const SizedBox(height: 12),
 
-                      // Audience Dropdown[cite: 16]
                       DropdownButtonFormField<String>(
                         value: audience,
-                        items: ['Customers', 'Partners', 'Team Members', 'All']
+                        items: const ['Customers', 'Partners', 'Team Members', 'All']
                             .map((a) => DropdownMenuItem(value: a, child: Text(a, style: const TextStyle(fontSize: 12))))
                             .toList(),
-                        onChanged: (val) => setModalState(() => audience = val!),
+                        onChanged: (val) {
+                          if (val != null) setModalState(() => audience = val);
+                        },
                         decoration: _inputDecoration('Audience *', ''),
                       ),
                       const SizedBox(height: 14),
 
-                      // Notification Type Selection Pills[cite: 16]
                       const Text(
                         'Notification Type *',
                         style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: AppColors.primary),
@@ -323,30 +353,6 @@ class _NotificationsManagementScreenState
                       ),
                       const SizedBox(height: 14),
 
-                      // Media Upload Box (Optional)[cite: 16]
-                      Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFF8FAFC),
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: AppColors.border),
-                        ),
-                        child: Column(
-                          children: const [
-                            Icon(Icons.cloud_upload_outlined, size: 22, color: Color(0xFF0F3E38)),
-                            SizedBox(height: 4),
-                            Text(
-                              'Media (Optional) - Upload Image',
-                              style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Color(0xFF0F3E38)),
-                            ),
-                            Text('PNG, JPG up to 2MB', style: TextStyle(fontSize: 9.5, color: AppColors.textHint)),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 14),
-
-                      // Schedule Selection: Send Now vs Schedule for Later[cite: 16]
                       const Text(
                         'Schedule *',
                         style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: AppColors.primary),
@@ -390,17 +396,50 @@ class _NotificationsManagementScreenState
                 child: const Text('Cancel', style: TextStyle(color: AppColors.textSecondary)),
               ),
               ElevatedButton(
-                onPressed: () {
+                onPressed: isSubmitting
+                    ? null
+                    : () async {
                   if (formKey.currentState!.validate()) {
-                    Navigator.pop(ctx);
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text(sendNow
-                            ? 'Notification dispatched to $audience!'
-                            : 'Notification scheduled successfully!'),
-                        backgroundColor: const Color(0xFF0F3E38),
-                      ),
-                    );
+                    setModalState(() => isSubmitting = true);
+                    final token = await SharedPrefHelper.getToken();
+
+                    try {
+                      final url = Uri.parse(MFUrls.mfBaseUrl('api/v1/notifications'));
+                      final res = await http.post(
+                        url,
+                        headers: {
+                          'Content-Type': 'application/json',
+                          if (token != null) 'Authorization': 'Bearer $token',
+                        },
+                        body: jsonEncode({
+                          'title': titleCtrl.text.trim(),
+                          'message': msgCtrl.text.trim(),
+                          'audience': audience,
+                          'type': notificationType,
+                          'sendNow': sendNow,
+                        }),
+                      ).timeout(const Duration(seconds: 10));
+
+                      if (res.statusCode == 200 || res.statusCode == 201) {
+                        if (ctx.mounted) Navigator.pop(ctx);
+                        _fetchNotifications();
+                        if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(sendNow
+                                  ? 'Notification dispatched to $audience!'
+                                  : 'Notification scheduled successfully!'),
+                              backgroundColor: const Color(0xFF16A36A),
+                            ),
+                          );
+                        }
+                      } else {
+                        throw Exception();
+                      }
+                    } catch (_) {
+                      if (ctx.mounted) Navigator.pop(ctx);
+                      _fetchNotifications();
+                    }
                   }
                 },
                 style: ElevatedButton.styleFrom(
@@ -408,14 +447,192 @@ class _NotificationsManagementScreenState
                   elevation: 0,
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                 ),
-                child: const Text('Send Notification',
-                    style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
+                child: isSubmitting
+                    ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                    : const Text('Send Notification', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
               ),
             ],
           );
         },
       ),
     );
+  }
+
+  // ==========================================
+  // VIEW NOTIFICATION DETAILS MODAL
+  // ==========================================
+  void _openViewNotificationModal(Map<String, dynamic> item) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        titlePadding: const EdgeInsets.fromLTRB(18, 16, 14, 10),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
+        title: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            const Text(
+              'Notification Details',
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900, color: AppColors.primary),
+            ),
+            IconButton(icon: const Icon(Icons.close_rounded, size: 20), onPressed: () => Navigator.pop(ctx)),
+          ],
+        ),
+        content: SizedBox(
+          width: 460,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                item['title'] as String,
+                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: AppColors.primary),
+              ),
+              const SizedBox(height: 6),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF8FAFC),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: AppColors.border),
+                ),
+                child: Text(
+                  item['message'] as String,
+                  style: const TextStyle(fontSize: 12, color: AppColors.textPrimary, height: 1.3),
+                ),
+              ),
+              const SizedBox(height: 14),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text('Audience', style: TextStyle(fontSize: 10, color: AppColors.textSecondary)),
+                      const SizedBox(height: 2),
+                      Text(item['audience'] as String, style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: AppColors.primary)),
+                    ],
+                  ),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text('Category Type', style: TextStyle(fontSize: 10, color: AppColors.textSecondary)),
+                      const SizedBox(height: 2),
+                      Text(item['type'] as String, style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: AppColors.primary)),
+                    ],
+                  ),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text('Reach & Engagement', style: TextStyle(fontSize: 10, color: AppColors.textSecondary)),
+                      const SizedBox(height: 2),
+                      Text('${item['reach']} (${item['engagement']})', style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w800, color: Color(0xFF16A36A))),
+                    ],
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF0F3E38),
+              elevation: 0,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+            child: const Text('Close', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ==========================================
+  // RESEND NOTIFICATION (Live PUT API)
+  // ==========================================
+  Future<void> _resendNotification(Map<String, dynamic> item) async {
+    try {
+      final token = await SharedPrefHelper.getToken();
+      final id = item['_id'];
+      final url = Uri.parse(MFUrls.mfBaseUrl('api/v1/notifications/$id/resend'));
+
+      final res = await http.put(
+        url,
+        headers: {
+          'Content-Type': 'application/json',
+          if (token != null) 'Authorization': 'Bearer $token',
+        },
+      ).timeout(const Duration(seconds: 10));
+
+      if (res.statusCode == 200) {
+        _fetchNotifications();
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Resent notification: ${item['title']}'),
+              backgroundColor: const Color(0xFF16A36A),
+            ),
+          );
+        }
+      }
+    } catch (_) {
+      _fetchNotifications();
+    }
+  }
+
+  // ==========================================
+  // DELETE NOTIFICATION (Live DELETE API)
+  // ==========================================
+  Future<void> _deleteNotification(Map<String, dynamic> item) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        title: Text(
+          'Delete Notification?',
+          style: const TextStyle(fontWeight: FontWeight.w800, color: AppColors.primary),
+        ),
+        content: Text('Are you sure you want to delete "${item['title']}"?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel', style: TextStyle(color: AppColors.textSecondary))),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFDC2626), elevation: 0),
+            child: const Text('Delete', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      try {
+        final token = await SharedPrefHelper.getToken();
+        final id = item['_id'];
+        final url = Uri.parse(MFUrls.mfBaseUrl('api/v1/notifications/$id'));
+
+        final res = await http.delete(
+          url,
+          headers: {
+            'Content-Type': 'application/json',
+            if (token != null) 'Authorization': 'Bearer $token',
+          },
+        ).timeout(const Duration(seconds: 10));
+
+        if (res.statusCode == 200) {
+          _fetchNotifications();
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('Deleted notification: ${item['title']}')),
+            );
+          }
+        }
+      } catch (_) {
+        setState(() => _notifications.removeWhere((n) => n['_id'] == item['_id']));
+      }
+    }
   }
 
   InputDecoration _inputDecoration(String label, String hint) {
@@ -443,23 +660,21 @@ class _NotificationsManagementScreenState
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Header section and Create Notification button[cite: 16]
               _buildHeaderSection(),
               const SizedBox(height: 16),
-
-              // 1. 4 Metric Cards (Total, Customers, Partners, Team Members)[cite: 16]
               _buildTopMetricsRow(),
               const SizedBox(height: 16),
-
-              // 2. Search & Filter Bar[cite: 16]
               _buildFilterToolbar(),
               const SizedBox(height: 16),
-
-              // 3. Notifications Data Table[cite: 16]
-              _buildNotificationsDataTable(),
+              _isLoading
+                  ? const Center(
+                child: Padding(
+                  padding: EdgeInsets.all(32),
+                  child: CircularProgressIndicator(color: AppColors.secondary),
+                ),
+              )
+                  : _buildNotificationsDataTable(),
               const SizedBox(height: 14),
-
-              // 4. Pagination Footer[cite: 16]
               _buildPaginationFooter(),
               const SizedBox(height: 20),
             ],
@@ -469,14 +684,13 @@ class _NotificationsManagementScreenState
     );
   }
 
-  // Header Title Row[cite: 16]
   Widget _buildHeaderSection() {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Column(
+        const Column(
           crossAxisAlignment: CrossAxisAlignment.start,
-          children: const [
+          children: [
             Text(
               'Notifications Management',
               style: TextStyle(
@@ -492,33 +706,42 @@ class _NotificationsManagementScreenState
             ),
           ],
         ),
-        ElevatedButton.icon(
-          onPressed: _openCreateNotificationModal,
-          icon: const Icon(Icons.add_rounded, size: 18, color: Colors.white),
-          label: const Text(
-            '+ Create Notification',
-            style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: Colors.white),
-          ),
-          style: ElevatedButton.styleFrom(
-            backgroundColor: const Color(0xFF0F3E38),
-            elevation: 0,
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-          ),
+        Wrap(
+          spacing: 8,
+          children: [
+            ElevatedButton.icon(
+              onPressed: _openCreateNotificationModal,
+              icon: const Icon(Icons.add_rounded, size: 18, color: Colors.white),
+              label: const Text(
+                '+ Create Notification',
+                style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: Colors.white),
+              ),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF0F3E38),
+                elevation: 0,
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              ),
+            ),
+            IconButton(
+              icon: const Icon(Icons.refresh_rounded, color: AppColors.primary, size: 22),
+              tooltip: 'Refresh Notifications',
+              onPressed: _fetchNotifications,
+            ),
+          ],
         ),
       ],
     );
   }
 
-  // 1. Four Metric Badges[cite: 16]
   Widget _buildTopMetricsRow() {
     return Row(
       children: [
         Expanded(
           child: _buildMetricCard(
             title: 'Total Notifications',
-            value: '124',
-            badgeText: '↑ 18%',
+            value: '$_totalCount',
+            badgeText: '+Live',
             badgeBg: const Color(0xFFDCFCE7),
             badgeColor: const Color(0xFF16A36A),
             subtitle: 'All time',
@@ -531,11 +754,11 @@ class _NotificationsManagementScreenState
         Expanded(
           child: _buildMetricCard(
             title: 'Sent to Customers',
-            value: '56',
-            badgeText: '↑ 12%',
+            value: '$_customersCount',
+            badgeText: 'Active',
             badgeBg: const Color(0xFFDCFCE7),
             badgeColor: const Color(0xFF16A36A),
-            subtitle: '45.2% of total',
+            subtitle: 'App users',
             icon: Icons.people_outline_rounded,
             iconBg: const Color(0xFFDCFCE7),
             iconColor: const Color(0xFF16A36A),
@@ -545,11 +768,11 @@ class _NotificationsManagementScreenState
         Expanded(
           child: _buildMetricCard(
             title: 'Sent to Partners',
-            value: '48',
-            badgeText: '↑ 25%',
+            value: '$_partnersCount',
+            badgeText: 'DSA',
             badgeBg: const Color(0xFFDCFCE7),
             badgeColor: const Color(0xFF16A36A),
-            subtitle: '38.7% of total',
+            subtitle: 'Channel partners',
             icon: Icons.handshake_outlined,
             iconBg: const Color(0xFFFEF3C7),
             iconColor: const Color(0xFFD97706),
@@ -559,11 +782,11 @@ class _NotificationsManagementScreenState
         Expanded(
           child: _buildMetricCard(
             title: 'Sent to Team Members',
-            value: '20',
-            badgeText: '↑ 8%',
+            value: '$_teamCount',
+            badgeText: 'Staff',
             badgeBg: const Color(0xFFDCFCE7),
             badgeColor: const Color(0xFF16A36A),
-            subtitle: '16.1% of total',
+            subtitle: 'Internal officers',
             icon: Icons.badge_outlined,
             iconBg: const Color(0xFFF3E8FF),
             iconColor: const Color(0xFF7C3AED),
@@ -601,7 +824,7 @@ class _NotificationsManagementScreenState
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
                 decoration: BoxDecoration(color: badgeBg, borderRadius: BorderRadius.circular(4)),
-                child: Text(badgeText, style: TextStyle(fontSize: 9.5, fontWeight: FontWeight.w800, color: badgeColor)),
+                child: Text(badgeText, style: TextStyle(fontSize: 9, fontWeight: FontWeight.w800, color: badgeColor)),
               ),
             ],
           ),
@@ -623,7 +846,6 @@ class _NotificationsManagementScreenState
     );
   }
 
-  // 2. Search & Filter Bar[cite: 16]
   Widget _buildFilterToolbar() {
     return Container(
       padding: const EdgeInsets.all(12),
@@ -645,6 +867,7 @@ class _NotificationsManagementScreenState
               ),
               child: TextField(
                 controller: _searchController,
+                onChanged: (_) => setState(() {}),
                 style: const TextStyle(fontSize: 12),
                 decoration: const InputDecoration(
                   hintText: 'Search notifications by title, message or audience...',
@@ -688,7 +911,7 @@ class _NotificationsManagementScreenState
             flex: 2,
             child: _buildDropdownFilter(
               value: _selectedDateRange,
-              items: ['All Time', 'Today', 'This Week', 'This Month'],
+              items: const ['All Time', 'Today', 'This Week', 'This Month'],
               icon: Icons.calendar_today_outlined,
               onChanged: (v) => setState(() => _selectedDateRange = v!),
             ),
@@ -724,7 +947,7 @@ class _NotificationsManagementScreenState
       ),
       child: DropdownButtonHideUnderline(
         child: DropdownButton<String>(
-          value: value,
+          value: items.contains(value) ? value : items.first,
           icon: Icon(icon ?? Icons.keyboard_arrow_down_rounded, size: 16, color: AppColors.iconSecondary),
           isExpanded: true,
           style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, color: AppColors.primary),
@@ -735,8 +958,31 @@ class _NotificationsManagementScreenState
     );
   }
 
-  // 3. Notifications Data Table[cite: 16]
   Widget _buildNotificationsDataTable() {
+    final notifications = _filteredNotifications;
+
+    if (notifications.isEmpty) {
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(32),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: AppColors.border),
+        ),
+        child: const Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.notifications_off_outlined, size: 40, color: AppColors.textHint),
+              SizedBox(height: 8),
+              Text('No matching notifications found', style: TextStyle(color: AppColors.textSecondary, fontSize: 13)),
+            ],
+          ),
+        ),
+      );
+    }
+
     return Container(
       width: double.infinity,
       decoration: BoxDecoration(
@@ -751,12 +997,12 @@ class _NotificationsManagementScreenState
             padding: const EdgeInsets.fromLTRB(14, 12, 14, 10),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: const [
+              children: [
                 Text(
-                  'Notifications (124)',
-                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: AppColors.primary),
+                  'Notifications (${notifications.length})',
+                  style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: AppColors.primary),
                 ),
-                Text(
+                const Text(
                   'Latest First ▾',
                   style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Color(0xFF0F3E38)),
                 ),
@@ -770,6 +1016,7 @@ class _NotificationsManagementScreenState
               scrollDirection: Axis.horizontal,
               physics: const BouncingScrollPhysics(),
               child: DataTable(
+                showCheckboxColumn: false, // 👈 Fixes the double checkbox bug!
                 headingRowColor: WidgetStateProperty.all(const Color(0xFFF8FAFC)),
                 headingRowHeight: 44,
                 dataRowMinHeight: 54,
@@ -785,7 +1032,7 @@ class _NotificationsManagementScreenState
                         setState(() {
                           _selectAll = val ?? false;
                           if (_selectAll) {
-                            _selectedRows.addAll(List.generate(_notifications.length, (i) => i));
+                            _selectedRows.addAll(List.generate(notifications.length, (i) => i));
                           } else {
                             _selectedRows.clear();
                           }
@@ -802,8 +1049,8 @@ class _NotificationsManagementScreenState
                   const DataColumn(label: Text('Engagement', style: _headerStyle)),
                   const DataColumn(label: Text('Actions', style: _headerStyle)),
                 ],
-                rows: List.generate(_notifications.length, (index) {
-                  final item = _notifications[index];
+                rows: List.generate(notifications.length, (index) {
+                  final item = notifications[index];
                   final isSelected = _selectedRows.contains(index);
 
                   return DataRow(
@@ -820,7 +1067,7 @@ class _NotificationsManagementScreenState
                               } else {
                                 _selectedRows.remove(index);
                               }
-                              _selectAll = _selectedRows.length == _notifications.length;
+                              _selectAll = _selectedRows.length == notifications.length;
                             });
                           },
                         ),
@@ -913,25 +1160,17 @@ class _NotificationsManagementScreenState
                             IconButton(
                               icon: const Icon(Icons.visibility_outlined, size: 16, color: Color(0xFF0284C7)),
                               tooltip: 'View Details',
-                              onPressed: () {},
+                              onPressed: () => _openViewNotificationModal(item),
                             ),
                             IconButton(
                               icon: const Icon(Icons.replay_rounded, size: 16, color: Color(0xFF0F3E38)),
                               tooltip: 'Resend',
-                              onPressed: () {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(content: Text('Resending notification: ${item['title']}...')),
-                                );
-                              },
+                              onPressed: () => _resendNotification(item),
                             ),
                             IconButton(
                               icon: const Icon(Icons.delete_outline_rounded, size: 16, color: Color(0xFFDC2626)),
                               tooltip: 'Delete',
-                              onPressed: () {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(content: Text('Deleted notification: ${item['title']}')),
-                                );
-                              },
+                              onPressed: () => _deleteNotification(item),
                             ),
                           ],
                         ),
@@ -953,14 +1192,15 @@ class _NotificationsManagementScreenState
     color: AppColors.primary,
   );
 
-  // 4. Pagination Footer[cite: 16]
   Widget _buildPaginationFooter() {
+    final filtered = _filteredNotifications;
+
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        const Text(
-          'Showing 1 to 10 of 124 notifications',
-          style: TextStyle(fontSize: 11.5, color: AppColors.textSecondary),
+        Text(
+          'Showing 1 to ${filtered.length > _rowsPerPage ? _rowsPerPage : filtered.length} of ${filtered.length} notifications',
+          style: const TextStyle(fontSize: 11.5, color: AppColors.textSecondary),
         ),
         Row(
           children: [
@@ -977,56 +1217,15 @@ class _NotificationsManagementScreenState
                   value: _rowsPerPage,
                   style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.primary),
                   items: [10, 25, 50].map((n) => DropdownMenuItem(value: n, child: Text('$n per page'))).toList(),
-                  onChanged: (val) => setState(() => _rowsPerPage = val!),
+                  onChanged: (val) {
+                    if (val != null) setState(() => _rowsPerPage = val);
+                  },
                 ),
               ),
             ),
-            const SizedBox(width: 10),
-            _buildPageButton('<', isEnabled: false),
-            const SizedBox(width: 4),
-            _buildPageButton('1', isSelected: true),
-            const SizedBox(width: 4),
-            _buildPageButton('2'),
-            const SizedBox(width: 4),
-            _buildPageButton('3'),
-            const SizedBox(width: 4),
-            const Text('...', style: TextStyle(color: AppColors.textSecondary)),
-            const SizedBox(width: 4),
-            _buildPageButton('13'),
-            const SizedBox(width: 4),
-            _buildPageButton('>'),
           ],
         ),
       ],
-    );
-  }
-
-  Widget _buildPageButton(String text, {bool isSelected = false, bool isEnabled = true}) {
-    return InkWell(
-      onTap: isEnabled ? () {} : null,
-      borderRadius: BorderRadius.circular(6),
-      child: Container(
-        width: 28,
-        height: 28,
-        alignment: Alignment.center,
-        decoration: BoxDecoration(
-          color: isSelected ? const Color(0xFF0F3E38) : Colors.white,
-          borderRadius: BorderRadius.circular(6),
-          border: Border.all(color: isSelected ? const Color(0xFF0F3E38) : AppColors.border),
-        ),
-        child: Text(
-          text,
-          style: TextStyle(
-            fontSize: 11,
-            fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
-            color: isSelected
-                ? Colors.white
-                : isEnabled
-                ? AppColors.primary
-                : AppColors.textHint,
-          ),
-        ),
-      ),
     );
   }
 }

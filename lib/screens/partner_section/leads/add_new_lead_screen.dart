@@ -1,8 +1,12 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:http/http.dart' as http;
 
+import '../../../../constants/api_urls.dart';
 import '../../../../constants/app_colors.dart';
 import '../../../../constants/asset_constants.dart';
+import '../../../../core/servicess/shared_pref_helper.dart';
 import '../dasboard/partner_dashboard_screen.dart';
 import 'my_leads_screen.dart';
 
@@ -26,8 +30,9 @@ class _AddNewLeadScreenState extends State<AddNewLeadScreen> {
   final _notesController = TextEditingController();
 
   String? _selectedCategory;
-  String? _selectedTenure;
-  int _currentStep = 1;
+  String? _selectedTenure = '1 Year';
+  final int _currentStep = 1;
+  bool _isLoading = false;
 
   final List<String> _loanCategories = [
     'Personal Loan',
@@ -61,22 +66,123 @@ class _AddNewLeadScreenState extends State<AddNewLeadScreen> {
     super.dispose();
   }
 
-  void _onNext() {
+  int _parseTenureMonths(String? tenure) {
+    switch (tenure) {
+      case '1 Year':
+        return 12;
+      case '2 Years':
+        return 24;
+      case '3 Years':
+        return 36;
+      case '5 Years':
+        return 60;
+      case '7 Years':
+        return 84;
+      case '10 Years':
+        return 120;
+      default:
+        return 12;
+    }
+  }
+
+  /// Real API Integration: POST /api/v1/loans/partner/create-lead
+  Future<void> _submitLead() async {
+    FocusScope.of(context).unfocus();
+
     if (!_formKey.currentState!.validate()) return;
 
     if (_selectedCategory == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please select a loan category')),
+        const SnackBar(
+          content: Text('Please select a loan category'),
+          backgroundColor: AppColors.error,
+        ),
       );
       return;
     }
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Proceeding to Step 2: Loan Details...'),
-        backgroundColor: Color(0xFF0F3E38),
-      ),
-    );
+    setState(() => _isLoading = true);
+
+    try {
+      final token = await SharedPrefHelper.getToken();
+      if (token == null) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Authentication token missing. Please re-login.'),
+              backgroundColor: AppColors.error,
+            ),
+          );
+        }
+        return;
+      }
+
+      final Map<String, dynamic> requestBody = {
+        'customerName': _nameController.text.trim(),
+        'customerPhone': _phoneController.text.trim(),
+        'customerEmail': _emailController.text.trim().toLowerCase(),
+        'loanType': _selectedCategory,
+        'loanAmount': double.tryParse(_amountController.text.trim()) ?? 0,
+        'tenureMonths': _parseTenureMonths(_selectedTenure),
+        'employmentType': 'Salaried',
+        'monthlyIncome': 25000,
+        'city': _addressController.text.trim(),
+        'purpose': _notesController.text.trim(),
+      };
+
+      final url = Uri.parse(MFUrls.mfBaseUrl('api/v1/loans/partner/create-lead'));
+      final response = await http
+          .post(
+        url,
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+        body: jsonEncode(requestBody),
+      )
+          .timeout(const Duration(seconds: 15));
+
+      final Map<String, dynamic> responseData = jsonDecode(response.body);
+
+      if (!mounted) return;
+
+      if (response.statusCode == 201 && responseData['success'] == true) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              responseData['message'] ?? 'Lead submitted successfully!',
+            ),
+            backgroundColor: const Color(0xFF16A36A),
+          ),
+        );
+
+        // Success hone par wapas Dashboard par bhejna
+        Navigator.pop(context, true);
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              responseData['message'] ?? 'Failed to submit lead. Try again.',
+            ),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Connection error: Unable to reach server (${e.toString()})'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
   }
 
   @override
@@ -105,10 +211,6 @@ class _AddNewLeadScreenState extends State<AddNewLeadScreen> {
         ),
         centerTitle: true,
         actions: [
-          IconButton(
-            icon: const Icon(Icons.notifications_outlined, color: AppColors.primary, size: 22),
-            onPressed: () {},
-          ),
           Padding(
             padding: const EdgeInsets.only(right: 14),
             child: CircleAvatar(
@@ -128,11 +230,8 @@ class _AddNewLeadScreenState extends State<AddNewLeadScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Title and Top Right Illustration Header
                 _buildHeaderSection(),
                 const SizedBox(height: 18),
-
-                // 4-Step Stepper Header
                 _buildStepper(),
                 const SizedBox(height: 20),
 
@@ -156,29 +255,39 @@ class _AddNewLeadScreenState extends State<AddNewLeadScreen> {
                 _buildLoanInfoFields(),
                 const SizedBox(height: 24),
 
-                // Next Button
+                // Submit Button
                 SizedBox(
                   width: double.infinity,
-                  height: 48,
+                  height: 50,
                   child: ElevatedButton(
-                    onPressed: _onNext,
+                    onPressed: _isLoading ? null : _submitLead,
                     style: ElevatedButton.styleFrom(
                       backgroundColor: const Color(0xFF0F3E38),
+                      disabledBackgroundColor: AppColors.buttonDisabled,
                       elevation: 0,
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
                     ),
-                    child: const Row(
+                    child: _isLoading
+                        ? const SizedBox(
+                      height: 22,
+                      width: 22,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2.2,
+                        color: Colors.white,
+                      ),
+                    )
+                        : const Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         Text(
-                          'Next',
+                          'Submit Lead',
                           style: TextStyle(
                             fontSize: 15,
                             fontWeight: FontWeight.w700,
                             color: Colors.white,
                           ),
                         ),
-                        SizedBox(width: 6),
+                        SizedBox(width: 8),
                         Icon(Icons.arrow_forward_rounded, size: 18, color: Colors.white),
                       ],
                     ),
@@ -191,7 +300,7 @@ class _AddNewLeadScreenState extends State<AddNewLeadScreen> {
         ),
       ),
       bottomNavigationBar: NavigationBar(
-        selectedIndex: 1, // Add Lead tab active
+        selectedIndex: 1,
         backgroundColor: Colors.white,
         elevation: 4,
         indicatorColor: const Color(0xFFDCFCE7),
@@ -208,11 +317,6 @@ class _AddNewLeadScreenState extends State<AddNewLeadScreen> {
               context,
               MaterialPageRoute(builder: (_) => const MyLeadsScreen()),
             );
-          } else if (index == 3) {
-            // Navigator.pushReplacement(
-            //   context,
-            //   MaterialPageRoute(builder: (_) => const PartnerProfileScreen()),
-            // );
           }
         },
         destinations: const [
@@ -244,10 +348,10 @@ class _AddNewLeadScreenState extends State<AddNewLeadScreen> {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Expanded(
+        const Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
-            children: const [
+            children: [
               Text(
                 'Add New Lead',
                 style: TextStyle(
@@ -258,7 +362,7 @@ class _AddNewLeadScreenState extends State<AddNewLeadScreen> {
               ),
               SizedBox(height: 4),
               Text(
-                'Fill in the customer details to create a new loan lead.',
+                'Fill in customer details to register loan lead under your partner code.',
                 style: TextStyle(
                   fontSize: 12,
                   color: AppColors.textSecondary,
@@ -269,8 +373,8 @@ class _AddNewLeadScreenState extends State<AddNewLeadScreen> {
           ),
         ),
         Container(
-          width: 58,
-          height: 58,
+          width: 54,
+          height: 54,
           decoration: BoxDecoration(
             color: const Color(0xFFE0F2FE),
             borderRadius: BorderRadius.circular(16),
@@ -278,7 +382,7 @@ class _AddNewLeadScreenState extends State<AddNewLeadScreen> {
           child: const Icon(
             Icons.assignment_add,
             color: Color(0xFF0284C7),
-            size: 30,
+            size: 28,
           ),
         ),
       ],
@@ -289,8 +393,8 @@ class _AddNewLeadScreenState extends State<AddNewLeadScreen> {
     final steps = [
       {'num': '1', 'title': 'Customer\nDetails'},
       {'num': '2', 'title': 'Loan\nDetails'},
-      {'num': '3', 'title': 'Documents\n(Optional)'},
-      {'num': '4', 'title': 'Review &\nSubmit'},
+      {'num': '3', 'title': 'Verification\nPending'},
+      {'num': '4', 'title': 'Commission\nDisbursal'},
     ];
 
     return Row(
@@ -347,7 +451,9 @@ class _AddNewLeadScreenState extends State<AddNewLeadScreen> {
                   child: Container(
                     width: 14,
                     height: 2,
-                    color: stepNum < _currentStep ? const Color(0xFF16A36A) : const Color(0xFFE2E8F0),
+                    color: stepNum < _currentStep
+                        ? const Color(0xFF16A36A)
+                        : const Color(0xFFE2E8F0),
                   ),
                 ),
             ],
@@ -468,8 +574,8 @@ class _AddNewLeadScreenState extends State<AddNewLeadScreen> {
         TextFormField(
           controller: _addressController,
           decoration: _fieldDecoration(
-            label: 'Residential Address',
-            hint: 'Enter complete address (optional)',
+            label: 'Residential City / Address',
+            hint: 'Enter city or complete address (optional)',
             icon: Icons.location_on_outlined,
           ),
         ),
@@ -494,6 +600,7 @@ class _AddNewLeadScreenState extends State<AddNewLeadScreen> {
         ),
         const SizedBox(height: 12),
         Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Expanded(
               child: TextFormField(
@@ -502,21 +609,20 @@ class _AddNewLeadScreenState extends State<AddNewLeadScreen> {
                 inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                 validator: (v) => (v == null || v.trim().isEmpty) ? 'Required' : null,
                 decoration: _fieldDecoration(
-                  label: 'Requested Loan Amount *',
+                  label: 'Requested Amount *',
                   hint: 'Enter amount',
                   icon: Icons.currency_rupee_rounded,
                 ),
               ),
             ),
-
-            SizedBox(
-              width: 200,
+            const SizedBox(width: 10),
+            Expanded(
               child: DropdownButtonFormField<String>(
                 value: _selectedTenure,
                 decoration: _fieldDecoration(
                   label: 'Loan Tenure',
                   hint: 'Select tenure',
-                  icon: Icons.bar_chart_rounded,
+                  icon: Icons.timelapse_rounded,
                 ),
                 items: _tenureOptions
                     .map(
@@ -533,7 +639,7 @@ class _AddNewLeadScreenState extends State<AddNewLeadScreen> {
                   setState(() => _selectedTenure = val);
                 },
               ),
-            )
+            ),
           ],
         ),
         const SizedBox(height: 12),
@@ -541,8 +647,8 @@ class _AddNewLeadScreenState extends State<AddNewLeadScreen> {
           controller: _notesController,
           maxLines: 2,
           decoration: _fieldDecoration(
-            label: 'Additional Notes',
-            hint: 'Enter any additional information (optional)',
+            label: 'Additional Notes / Remarks',
+            hint: 'Enter any additional remarks (optional)',
             icon: Icons.edit_note_rounded,
           ),
         ),

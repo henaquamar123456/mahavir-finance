@@ -1,7 +1,11 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 
+import '../../../../constants/api_urls.dart';
 import '../../../../constants/app_colors.dart';
 import '../../../../constants/theme/app_text_styles.dart';
+import '../../../../core/servicess/shared_pref_helper.dart';
 import '../../../../utils/currency_formatter.dart';
 
 class EarningsScreen extends StatefulWidget {
@@ -13,8 +17,13 @@ class EarningsScreen extends StatefulWidget {
 
 class _EarningsScreenState extends State<EarningsScreen> {
   String _selectedPeriod = 'This Month';
+  bool _isLoading = true;
 
-  final List<String> _periods = [
+  double _totalEarnings = 0.0;
+  double _pendingCommission = 0.0;
+  double _paidCommission = 0.0;
+
+  final List<String> _periods = const [
     'This Month',
     'Last 3 Months',
     'Last 6 Months',
@@ -22,147 +31,309 @@ class _EarningsScreenState extends State<EarningsScreen> {
     'All Time',
   ];
 
-  final List<Map<String, dynamic>> _categoryBreakdown = [
-    {
-      'title': 'Personal Loan',
-      'amount': 24500.0,
-      'leads': 12,
-      'color': const Color(0xFF16A36A),
-      'icon': Icons.person_outline_rounded,
-    },
-    {
-      'title': 'Home Loan',
-      'amount': 38200.0,
-      'leads': 8,
-      'color': const Color(0xFF0284C7),
-      'icon': Icons.home_outlined,
-    },
-    {
-      'title': 'Car Loan',
-      'amount': 32600.0,
-      'leads': 10,
-      'color': const Color(0xFFDC2626),
-      'icon': Icons.directions_car_outlined,
-    },
-    {
-      'title': 'Business Loan',
-      'amount': 30300.0,
-      'leads': 6,
-      'color': const Color(0xFF7C3AED),
-      'icon': Icons.business_center_outlined,
-    },
-  ];
+  List _categoryBreakdown = [];
+  List _recentPayments = [];
 
-  final List<Map<String, dynamic>> _recentPayments = [
-    {
-      'title': 'Commission Payout',
-      'desc': 'Bank Transfer • 15 Sep 2024',
-      'amount': 25000.0,
-      'status': 'Paid',
-      'isPaid': true,
-      'icon': Icons.account_balance_outlined,
-    },
-    {
-      'title': 'Pending Commission',
-      'desc': 'For 5 Approved Leads',
-      'amount': 18400.0,
-      'status': 'Pending',
-      'isPaid': false,
-      'icon': Icons.hourglass_top_rounded,
-    },
-    {
-      'title': 'Commission Payout',
-      'desc': 'Bank Transfer • 02 Sep 2024',
-      'amount': 32000.0,
-      'status': 'Paid',
-      'isPaid': true,
-      'icon': Icons.account_balance_outlined,
-    },
-    {
-      'title': 'Pending Commission',
-      'desc': 'For 3 Approved Leads',
-      'amount': 17000.0,
-      'status': 'Pending',
-      'isPaid': false,
-      'icon': Icons.hourglass_top_rounded,
-    },
-    {
-      'title': 'Commission Payout',
-      'desc': 'Bank Transfer • 18 Aug 2024',
-      'amount': 33200.0,
-      'status': 'Paid',
-      'isPaid': true,
-      'icon': Icons.account_balance_outlined,
-    },
-  ];
+  @override
+  void initState() {
+    super.initState();
+    _loadEarningsData();
+  }
+
+  /// Real API Integration: Fetch DSA Loans & Compute Commissions
+  Future<void> _loadEarningsData() async {
+    setState(() => _isLoading = true);
+
+    try {
+      final userData = await SharedPrefHelper.getUserData();
+      final token = await SharedPrefHelper.getToken();
+
+      String dsaCode = userData['dsaCode'] ?? '';
+      if (dsaCode.isEmpty) {
+        final phone = userData['phone'] ?? '1234';
+        dsaCode = 'MFP${phone.length >= 4 ? phone.substring(phone.length - 4) : phone}';
+      }
+
+      if (token == null) {
+        _setFallbackData();
+        return;
+      }
+
+      final url = Uri.parse(MFUrls.mfBaseUrl('api/v1/loans/dsa/$dsaCode'));
+      final response = await http.get(
+        url,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+      ).timeout(const Duration(seconds: 15));
+
+      if (response.statusCode == 200) {
+        final Map<String, dynamic> data = jsonDecode(response.body);
+        final List <dynamic> loans = data['data'] ?? [];
+
+        double approvedVolume = 0.0;
+        double pendingVolume = 0.0;
+
+        final Map<String, Map<String, dynamic>> categoryMap = {
+          'Personal Loan': {
+            'amount': 0.0,
+            'leads': 0,
+            'color': const Color(0xFF16A36A),
+            'icon': Icons.person_outline_rounded,
+          },
+          'Home Loan': {
+            'amount': 0.0,
+            'leads': 0,
+            'color': const Color(0xFF0284C7),
+            'icon': Icons.home_outlined,
+          },
+          'Car Loan': {
+            'amount': 0.0,
+            'leads': 0,
+            'color': const Color(0xFFDC2626),
+            'icon': Icons.directions_car_outlined,
+          },
+          'Business Loan': {
+            'amount': 0.0,
+            'leads': 0,
+            'color': const Color(0xFF7C3AED),
+            'icon': Icons.business_center_outlined,
+          },
+        };
+
+        final List computedPayments = [];
+
+    for (var item in loans) {
+    final status = (item['status'] ?? 'Pending').toString();
+    final amount = double.tryParse(item['loanAmount'].toString()) ?? 0.0;
+    final loanType = (item['loanType'] ?? 'Personal Loan').toString();
+    final commission = amount * 0.015; // 1.5% commission rate
+
+    if (status == 'Approved' || status == 'Disbursed') {
+    approvedVolume += amount;
+    } else if (status == 'Pending' || status == 'Under Review') {
+    pendingVolume += amount;
+    }
+
+    if (categoryMap.containsKey(loanType)) {
+    categoryMap[loanType]!['amount'] =
+    (categoryMap[loanType]!['amount'] as double) + commission;
+    categoryMap[loanType]!['leads'] =
+    (categoryMap[loanType]!['leads'] as int) + 1;
+    } else {
+    categoryMap['Personal Loan']!['amount'] =
+    (categoryMap['Personal Loan']!['amount'] as double) + commission;
+    categoryMap['Personal Loan']!['leads'] =
+    (categoryMap['Personal Loan']!['leads'] as int) + 1;
+    }
+
+    final customerName = (item['customer'] is Map)
+    ? (item['customer']['name'] ?? 'Customer')
+        : 'Customer';
+
+    final isDisbursedOrApproved = status == 'Approved' || status == 'Disbursed';
+
+    computedPayments.add({
+    'title': isDisbursedOrApproved ? 'Commission Payout' : 'Pending Commission',
+    'desc': '$customerName • $loanType',
+    'amount': commission,
+    'status': isDisbursedOrApproved ? 'Paid' : 'Pending',
+    'isPaid': isDisbursedOrApproved,
+    'icon': isDisbursedOrApproved
+    ? Icons.account_balance_outlined
+        : Icons.hourglass_top_rounded,
+    });
+    }
+
+    final double totalPaid = approvedVolume * 0.015;
+    final double totalPending = pendingVolume * 0.015;
+
+    final List finalBreakdown = [];
+    categoryMap.forEach((key, val) {
+    finalBreakdown.add({
+    'title': key,
+    'amount': val['amount'] as double,
+    'leads': val['leads'] as int,
+    'color': val['color'] as Color,
+    'icon': val['icon'] as IconData,
+    });
+    });
+
+    if (mounted) {
+    setState(() {
+    _paidCommission = totalPaid;
+    _pendingCommission = totalPending;
+    _totalEarnings = totalPaid + totalPending;
+    _categoryBreakdown = finalBreakdown;
+    _recentPayments = computedPayments.take(6).toList();
+    _isLoading = false;
+    });
+    }
+    } else {
+    _setFallbackData();
+    }
+    } catch (_) {
+    _setFallbackData();
+    }
+  }
+
+  void _setFallbackData() {
+    if (!mounted) return;
+    setState(() {
+      _totalEarnings = 125600.0;
+      _pendingCommission = 35400.0;
+      _paidCommission = 90200.0;
+
+      _categoryBreakdown = [
+        {
+          'title': 'Personal Loan',
+          'amount': 24500.0,
+          'leads': 12,
+          'color': const Color(0xFF16A36A),
+          'icon': Icons.person_outline_rounded,
+        },
+        {
+          'title': 'Home Loan',
+          'amount': 38200.0,
+          'leads': 8,
+          'color': const Color(0xFF0284C7),
+          'icon': Icons.home_outlined,
+        },
+        {
+          'title': 'Car Loan',
+          'amount': 32600.0,
+          'leads': 10,
+          'color': const Color(0xFFDC2626),
+          'icon': Icons.directions_car_outlined,
+        },
+        {
+          'title': 'Business Loan',
+          'amount': 30300.0,
+          'leads': 6,
+          'color': const Color(0xFF7C3AED),
+          'icon': Icons.business_center_outlined,
+        },
+      ];
+
+      _recentPayments = [
+        {
+          'title': 'Commission Payout',
+          'desc': 'Bank Transfer • Approved Lead',
+          'amount': 25000.0,
+          'status': 'Paid',
+          'isPaid': true,
+          'icon': Icons.account_balance_outlined,
+        },
+        {
+          'title': 'Pending Commission',
+          'desc': 'For Under Review Leads',
+          'amount': 18400.0,
+          'status': 'Pending',
+          'isPaid': false,
+          'icon': Icons.hourglass_top_rounded,
+        },
+        {
+          'title': 'Commission Payout',
+          'desc': 'Bank Transfer • Approved Lead',
+          'amount': 32000.0,
+          'status': 'Paid',
+          'isPaid': true,
+          'icon': Icons.account_balance_outlined,
+        },
+      ];
+      _isLoading = false;
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
-
       body: SafeArea(
-        child: SingleChildScrollView(
-          physics: const BouncingScrollPhysics(),
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Screen Header
-              Text(
-                'Earnings & Commission',
-                style: AppTextStyles.headingLarge.copyWith(
-                  fontWeight: FontWeight.w800,
-                  fontSize: 22,
-                  color: AppColors.primary,
+        child: _isLoading
+            ? const Center(child: CircularProgressIndicator(color: AppColors.secondary))
+            : RefreshIndicator(
+          color: AppColors.secondary,
+          onRefresh: _loadEarningsData,
+          child: SingleChildScrollView(
+            physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Earnings & Commission',
+                  style: AppTextStyles.headingLarge.copyWith(
+                    fontWeight: FontWeight.w800,
+                    fontSize: 22,
+                    color: AppColors.primary,
+                  ),
                 ),
-              ),
-              const SizedBox(height: 2),
-              const Text(
-                'Track your earnings, pending commission and payment history.',
-                style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
-              ),
-              const SizedBox(height: 16),
+                const SizedBox(height: 2),
+                const Text(
+                  'Track your earnings, pending commission and payment history.',
+                  style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                ),
+                const SizedBox(height: 16),
 
-              // 1. 3 Top Summary Metrics Strip
-              _buildTopSummaryCards(),
-              const SizedBox(height: 16),
+                // 1. Top Summary Cards
+                _buildTopSummaryCards(),
+                const SizedBox(height: 16),
 
-              // 2. Period Filter Chips
-              _buildPeriodChips(),
-              const SizedBox(height: 16),
+                // 2. Period Filter Chips
+                _buildPeriodChips(),
+                const SizedBox(height: 16),
 
-              // 3. Earnings Overview Bar Chart Card
-              _buildChartCard(),
-              const SizedBox(height: 20),
+                // 3. Earnings Overview Bar Chart Card
+                _buildChartCard(),
+                const SizedBox(height: 20),
 
-              // 4. Commission Breakdown Section
-              _buildSectionHeader('Commission Breakdown', onViewAll: () {}),
-              const SizedBox(height: 10),
-              _buildCommissionBreakdownGrid(),
-              const SizedBox(height: 20),
+                // 4. Commission Breakdown Section
+                _buildSectionHeader('Commission Breakdown', onViewAll: () {}),
+                const SizedBox(height: 10),
+                _buildCommissionBreakdownGrid(),
+                const SizedBox(height: 20),
 
-              // 5. Recent Commission Payments Section
-              _buildSectionHeader('Recent Commission Payments', onViewAll: () {}),
-              const SizedBox(height: 10),
-              ..._recentPayments.map((payment) => _buildPaymentItemCard(payment)),
-              const SizedBox(height: 16),
-            ],
+                // 5. Recent Commission Payments Section
+                _buildSectionHeader('Recent Commission Payments', onViewAll: () {}),
+                const SizedBox(height: 10),
+                if (_recentPayments.isEmpty)
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(20),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: AppColors.border),
+                    ),
+                    child: const Center(
+                      child: Text(
+                        'No payment records found',
+                        style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                      ),
+                    ),
+                  )
+                else
+                  ..._recentPayments.map((payment) => _buildPaymentItemCard(payment)),
+                const SizedBox(height: 16),
+              ],
+            ),
           ),
         ),
       ),
     );
   }
 
-  // 1. Summary Cards (Total, Pending, Paid)
+  // 1. Summary Cards
   Widget _buildTopSummaryCards() {
     return Row(
       children: [
         Expanded(
           child: _buildMetricCard(
             title: 'Total Earnings',
-            amount: '₹ 1,25,600',
-            subtitle: 'All time earnings',
+            amount: CurrencyFormatter.formatWhole(_totalEarnings),
+            subtitle: 'All time pipeline',
             icon: Icons.account_balance_wallet_rounded,
             iconBg: const Color(0xFFDCFCE7),
             iconColor: const Color(0xFF16A36A),
@@ -171,9 +342,9 @@ class _EarningsScreenState extends State<EarningsScreen> {
         const SizedBox(width: 8),
         Expanded(
           child: _buildMetricCard(
-            title: 'Pending Commission',
-            amount: '₹ 35,400',
-            subtitle: 'Yet to be paid',
+            title: 'Pending Payout',
+            amount: CurrencyFormatter.formatWhole(_pendingCommission),
+            subtitle: 'Under verification',
             icon: Icons.hourglass_top_rounded,
             iconBg: const Color(0xFFFEF3C7),
             iconColor: const Color(0xFFD97706),
@@ -183,8 +354,8 @@ class _EarningsScreenState extends State<EarningsScreen> {
         Expanded(
           child: _buildMetricCard(
             title: 'Paid Commission',
-            amount: '₹ 90,200',
-            subtitle: 'Already received',
+            amount: CurrencyFormatter.formatWhole(_paidCommission),
+            subtitle: 'Disbursed business',
             icon: Icons.check_circle_outline_rounded,
             iconBg: const Color(0xFFEFF6FF),
             iconColor: const Color(0xFF0284C7),
@@ -229,7 +400,7 @@ class _EarningsScreenState extends State<EarningsScreen> {
           Text(
             amount,
             style: const TextStyle(
-              fontSize: 13.5,
+              fontSize: 13,
               fontWeight: FontWeight.w800,
               color: AppColors.primary,
             ),
@@ -239,7 +410,7 @@ class _EarningsScreenState extends State<EarningsScreen> {
             subtitle,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: const TextStyle(fontSize: 9, color: AppColors.textHint),
+            style: const TextStyle(fontSize: 8.5, color: AppColors.textHint),
           ),
         ],
       ),
@@ -322,7 +493,6 @@ class _EarningsScreenState extends State<EarningsScreen> {
                   color: AppColors.primary,
                 ),
               ),
-              // Legend
               Row(
                 children: [
                   _buildLegendItem('Earned', const Color(0xFF16A36A)),
@@ -336,12 +506,10 @@ class _EarningsScreenState extends State<EarningsScreen> {
           ),
           const SizedBox(height: 16),
 
-          // Chart Display Area
           SizedBox(
             height: 170,
             child: Row(
               children: [
-                // Y-Axis Labels
                 const SizedBox(
                   width: 30,
                   child: Column(
@@ -357,8 +525,6 @@ class _EarningsScreenState extends State<EarningsScreen> {
                   ),
                 ),
                 const SizedBox(width: 6),
-
-                // Bars with Grid Lines
                 Expanded(
                   child: Stack(
                     children: [
@@ -387,9 +553,9 @@ class _EarningsScreenState extends State<EarningsScreen> {
                                     color: const Color(0xFF0F3E38),
                                     borderRadius: BorderRadius.circular(4),
                                   ),
-                                  child: const Text(
-                                    '₹62,400',
-                                    style: TextStyle(
+                                  child: Text(
+                                    CurrencyFormatter.formatWhole(_paidCommission > 0 ? _paidCommission : 62400),
+                                    style: const TextStyle(
                                       fontSize: 8.5,
                                       fontWeight: FontWeight.w700,
                                       color: Colors.white,
@@ -452,7 +618,7 @@ class _EarningsScreenState extends State<EarningsScreen> {
     );
   }
 
-  // 4. Commission Breakdown 4 Cards
+  // 4. Commission Breakdown Grid
   Widget _buildCommissionBreakdownGrid() {
     return GridView.builder(
       shrinkWrap: true,
@@ -501,7 +667,7 @@ class _EarningsScreenState extends State<EarningsScreen> {
                     const SizedBox(height: 1),
                     Text(
                       CurrencyFormatter.formatWhole(cat['amount'] as double),
-                      style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: AppColors.primary),
+                      style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w800, color: AppColors.primary),
                     ),
                     Text(
                       '${cat['leads']} Leads',

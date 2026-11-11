@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../../../constants/app_colors.dart';
 import '../../../../constants/asset_constants.dart';
+import '../../../../utils/currency_formatter.dart';
 import '../leads/add_new_lead_screen.dart';
 
 class CustomerDetailsScreen extends StatefulWidget {
@@ -14,13 +16,48 @@ class CustomerDetailsScreen extends StatefulWidget {
 }
 
 class _CustomerDetailsScreenState extends State<CustomerDetailsScreen> {
+  Future<void> _makeCall(String phone) async {
+    final cleanPhone = phone.replaceAll(RegExp(r'[^0-9+]'), '');
+    final Uri uri = Uri.parse('tel:$cleanPhone');
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri);
+    } else if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Unable to call $cleanPhone'),
+          backgroundColor: AppColors.error,
+        ),
+      );
+    }
+  }
+
+  Future<void> _openWhatsApp(String phone, String name) async {
+    final cleanPhone = phone.replaceAll(RegExp(r'[^0-9]'), '');
+    final String url =
+        'https://wa.me/$cleanPhone?text=Hello%20$name,%20greetings%20from%20Mahavir%20Finance!';
+    final Uri uri = Uri.parse(url);
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    } else if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Could not open WhatsApp for $cleanPhone'),
+          backgroundColor: AppColors.error,
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    final customerName = widget.customer?['name'] ?? 'Amit Shah';
-    final customerPhone = widget.customer?['phone'] ?? '+91 98765 43210';
-    final customerEmail = widget.customer?['email'] ?? 'amit.shah@gmail.com';
-    final customerCity = widget.customer?['city'] ?? 'Ahmedabad, Gujarat';
-    final customerId = widget.customer?['id'] ?? 'CUST00124';
+    final customerName = widget.customer?['name'] ?? 'Customer';
+    final customerPhone = widget.customer?['phone'] ?? 'N/A';
+    final customerEmail = widget.customer?['email'] ?? 'N/A';
+    final customerCity = widget.customer?['city'] ?? 'India';
+    final customerLoan = widget.customer?['loanType'] ?? 'Personal Loan';
+    final customerAmount = double.tryParse(widget.customer?['amount']?.toString() ?? '0') ?? 0.0;
+    final customerStatus = widget.customer?['status'] ?? 'Pending';
+    final isVerified = widget.customer?['verified'] ?? false;
 
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
@@ -45,20 +82,6 @@ class _CustomerDetailsScreenState extends State<CustomerDetailsScreen> {
           ),
         ),
         centerTitle: true,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.notifications_outlined, color: AppColors.primary, size: 22),
-            onPressed: () {},
-          ),
-          Padding(
-            padding: const EdgeInsets.only(right: 14),
-            child: CircleAvatar(
-              radius: 17,
-              backgroundColor: const Color(0xFF0F3E38).withValues(alpha: 0.1),
-              child: const Icon(Icons.person, size: 20, color: Color(0xFF0F3E38)),
-            ),
-          ),
-        ],
       ),
       body: SafeArea(
         child: Column(
@@ -70,7 +93,6 @@ class _CustomerDetailsScreenState extends State<CustomerDetailsScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Header Title
                     const Text(
                       'Customer Details',
                       style: TextStyle(
@@ -81,7 +103,7 @@ class _CustomerDetailsScreenState extends State<CustomerDetailsScreen> {
                     ),
                     const SizedBox(height: 3),
                     const Text(
-                      'View customer profile, loan details and complete lead history.',
+                      'View customer profile, loan requirements and complete lead history.',
                       style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
                     ),
                     const SizedBox(height: 16),
@@ -89,10 +111,11 @@ class _CustomerDetailsScreenState extends State<CustomerDetailsScreen> {
                     // 1. Hero Customer Overview Card
                     _buildCustomerHeroCard(
                       name: customerName,
-                      id: customerId,
                       phone: customerPhone,
                       email: customerEmail,
                       city: customerCity,
+                      isVerified: isVerified,
+                      status: customerStatus,
                     ),
                     const SizedBox(height: 14),
 
@@ -101,6 +124,7 @@ class _CustomerDetailsScreenState extends State<CustomerDetailsScreen> {
                       name: customerName,
                       phone: customerPhone,
                       email: customerEmail,
+                      city: customerCity,
                     ),
                     const SizedBox(height: 14),
 
@@ -109,11 +133,15 @@ class _CustomerDetailsScreenState extends State<CustomerDetailsScreen> {
                     const SizedBox(height: 14),
 
                     // 4. Loan Requirement Card
-                    _buildLoanRequirementCard(),
+                    _buildLoanRequirementCard(
+                      loanType: customerLoan,
+                      amount: customerAmount,
+                      status: customerStatus,
+                    ),
                     const SizedBox(height: 14),
 
                     // 5. Lead History Card
-                    _buildLeadHistoryCard(),
+                    _buildLeadHistoryCard(customerStatus),
                     const SizedBox(height: 14),
 
                     // 6. Submitted Documents Card
@@ -125,20 +153,20 @@ class _CustomerDetailsScreenState extends State<CustomerDetailsScreen> {
             ),
 
             // Bottom Sticky Bar (Call Customer, WhatsApp, Add New Lead)
-            _buildBottomActionBar(context, customerPhone),
+            _buildBottomActionBar(context, customerName, customerPhone),
           ],
         ),
       ),
     );
   }
 
-  // 1. Hero Customer Card
   Widget _buildCustomerHeroCard({
     required String name,
-    required String id,
     required String phone,
     required String email,
     required String city,
+    required bool isVerified,
+    required String status,
   }) {
     return Container(
       width: double.infinity,
@@ -174,7 +202,7 @@ class _CustomerDetailsScreenState extends State<CustomerDetailsScreen> {
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      'Customer ID: $id',
+                      'Referred Customer',
                       style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
                     ),
                     const SizedBox(height: 6),
@@ -182,8 +210,10 @@ class _CustomerDetailsScreenState extends State<CustomerDetailsScreen> {
                       spacing: 6,
                       runSpacing: 4,
                       children: [
-                        _buildBadge('Verified', const Color(0xFFDCFCE7), const Color(0xFF16A36A)),
-                        _buildBadge('Existing Customer', const Color(0xFFEFF6FF), const Color(0xFF0284C7)),
+                        if (isVerified)
+                          _buildBadge('Verified Account', const Color(0xFFDCFCE7), const Color(0xFF16A36A))
+                        else
+                          _buildBadge('Lead Contact', const Color(0xFFEFF6FF), const Color(0xFF0284C7)),
                       ],
                     ),
                   ],
@@ -195,9 +225,9 @@ class _CustomerDetailsScreenState extends State<CustomerDetailsScreen> {
                   color: const Color(0xFFDCFCE7),
                   borderRadius: BorderRadius.circular(8),
                 ),
-                child: const Text(
-                  'Active Customer',
-                  style: TextStyle(
+                child: Text(
+                  status,
+                  style: const TextStyle(
                     fontSize: 10.5,
                     fontWeight: FontWeight.w700,
                     color: Color(0xFF16A36A),
@@ -213,19 +243,17 @@ class _CustomerDetailsScreenState extends State<CustomerDetailsScreen> {
           const SizedBox(height: 6),
           _buildInfoRow(Icons.email_outlined, email),
           const SizedBox(height: 6),
-          _buildInfoRow(Icons.cake_outlined, '15 Mar 1990 (34 years)'),
-          const SizedBox(height: 6),
           _buildInfoRow(Icons.location_on_outlined, city),
         ],
       ),
     );
   }
 
-  // 2. Personal Information Card
   Widget _buildPersonalInformationCard({
     required String name,
     required String phone,
     required String email,
+    required String city,
   }) {
     return Container(
       width: double.infinity,
@@ -242,20 +270,16 @@ class _CustomerDetailsScreenState extends State<CustomerDetailsScreen> {
             icon: Icons.person_outline_rounded,
             iconColor: const Color(0xFF16A36A),
             title: 'Personal Information',
-            onEdit: () {},
           ),
           const SizedBox(height: 12),
-          _buildTwoColRow('Full Name', name, 'Date of Birth', '15 Mar 1990'),
+          _buildTwoColRow('Full Name', name, 'City / Region', city),
           const Divider(height: 16, color: AppColors.divider),
-          _buildTwoColRow('Mobile Number', phone, 'Address', '203, Satellite Road,\nAhmedabad, Gujarat - 380015'),
-          const Divider(height: 16, color: AppColors.divider),
-          _buildTwoColRow('Email Address', email, '', ''),
+          _buildTwoColRow('Mobile Number', phone, 'Email Address', email),
         ],
       ),
     );
   }
 
-  // 3. Employment & Income Details Card
   Widget _buildEmploymentDetailsCard() {
     return Container(
       width: double.infinity,
@@ -271,22 +295,22 @@ class _CustomerDetailsScreenState extends State<CustomerDetailsScreen> {
           _buildCardHeader(
             icon: Icons.business_center_outlined,
             iconColor: const Color(0xFF0284C7),
-            title: 'Employment & Income Details',
-            onEdit: () {},
+            title: 'Employment & Income Profile',
           ),
           const SizedBox(height: 12),
-          _buildTwoColRow('Employment Type', 'Salaried', 'Monthly Income', '₹75,000', isBoldSecond: true),
+          _buildTwoColRow('Employment Type', 'Salaried / Professional', 'Monthly Income', '₹25,000+ (Est.)', isBoldSecond: true),
           const Divider(height: 16, color: AppColors.divider),
-          _buildTwoColRow('Company Name', 'TCS Pvt. Ltd.', 'Work Experience', '5 Years'),
-          const Divider(height: 16, color: AppColors.divider),
-          _buildTwoColRow('PAN Number', 'ABCDE1234F', '', ''),
+          _buildTwoColRow('Eligibility Status', 'Eligible for DSA Lead', 'Credit Profile', 'Standard Check'),
         ],
       ),
     );
   }
 
-  // 4. Loan Requirement Card
-  Widget _buildLoanRequirementCard() {
+  Widget _buildLoanRequirementCard({
+    required String loanType,
+    required double amount,
+    required String status,
+  }) {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(14),
@@ -302,36 +326,28 @@ class _CustomerDetailsScreenState extends State<CustomerDetailsScreen> {
             icon: Icons.assignment_outlined,
             iconColor: const Color(0xFFD97706),
             title: 'Loan Requirement',
-            onEdit: () {},
           ),
           const SizedBox(height: 12),
-          _buildTwoColRow('Loan Category', 'Car Loan', 'Loan Tenure', '5 Years'),
+          _buildTwoColRow('Loan Category', loanType, 'Current Status', status),
           const Divider(height: 16, color: AppColors.divider),
-          _buildTwoColRow('Requested Amount', '₹8,00,000', 'Purpose', 'New Car Purchase', isBoldFirst: true),
+          _buildTwoColRow('Requested Amount', CurrencyFormatter.formatWhole(amount), 'Est. Partner Commission', CurrencyFormatter.formatWhole(amount * 0.015), isBoldFirst: true, isBoldSecond: true),
         ],
       ),
     );
   }
 
-  // 5. Lead History Card
-  Widget _buildLeadHistoryCard() {
+  Widget _buildLeadHistoryCard(String currentStatus) {
     final history = [
       {
-        'time': '13 Sep 2024, 09:15 AM',
-        'status': 'Under Review',
-        'desc': 'Documents verified. Application is under review by credit team.',
+        'time': 'Recent Update',
+        'status': currentStatus,
+        'desc': 'Application is currently in "$currentStatus" status with the finance team.',
         'isCurrent': true,
       },
       {
-        'time': '12 Sep 2024, 02:30 PM',
-        'status': 'Documents Submitted',
-        'desc': 'All required documents have been submitted successfully.',
-        'isCurrent': false,
-      },
-      {
-        'time': '12 Sep 2024, 10:30 AM',
-        'status': 'Lead Created',
-        'desc': 'Lead created by you.',
+        'time': 'Initiated',
+        'status': 'Lead Registered',
+        'desc': 'Customer lead successfully referred under your partner code.',
         'isCurrent': false,
       },
     ];
@@ -348,32 +364,20 @@ class _CustomerDetailsScreenState extends State<CustomerDetailsScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Row(
-                children: [
-                  Container(
-                    width: 26,
-                    height: 26,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFDCFCE7),
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                    child: const Icon(Icons.history_rounded, size: 16, color: Color(0xFF16A36A)),
-                  ),
-                  const SizedBox(width: 8),
-                  const Text(
-                    'Lead History',
-                    style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w800, color: AppColors.primary),
-                  ),
-                ],
-              ),
-              InkWell(
-                onTap: () {},
-                child: const Text(
-                  'View All >',
-                  style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: Color(0xFF0F3E38)),
+              Container(
+                width: 26,
+                height: 26,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFDCFCE7),
+                  borderRadius: BorderRadius.circular(6),
                 ),
+                child: const Icon(Icons.history_rounded, size: 16, color: Color(0xFF16A36A)),
+              ),
+              const SizedBox(width: 8),
+              const Text(
+                'Lead History',
+                style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w800, color: AppColors.primary),
               ),
             ],
           ),
@@ -391,7 +395,7 @@ class _CustomerDetailsScreenState extends State<CustomerDetailsScreen> {
                     ),
                     Container(
                       width: 1.5,
-                      height: 42,
+                      height: 38,
                       color: const Color(0xFFE2E8F0),
                     ),
                   ],
@@ -408,18 +412,21 @@ class _CustomerDetailsScreenState extends State<CustomerDetailsScreen> {
                             h['time'] as String,
                             style: const TextStyle(fontSize: 10, color: AppColors.textHint, fontWeight: FontWeight.w600),
                           ),
-                          if (isCurrent)
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
-                              decoration: BoxDecoration(
-                                color: const Color(0xFFE0F2FE),
-                                borderRadius: BorderRadius.circular(4),
-                              ),
-                              child: Text(
-                                h['status'] as String,
-                                style: const TextStyle(fontSize: 9.5, fontWeight: FontWeight.w700, color: Color(0xFF0284C7)),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
+                            decoration: BoxDecoration(
+                              color: isCurrent ? const Color(0xFFE0F2FE) : const Color(0xFFF1F5F9),
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            child: Text(
+                              h['status'] as String,
+                              style: TextStyle(
+                                fontSize: 9.5,
+                                fontWeight: FontWeight.w700,
+                                color: isCurrent ? const Color(0xFF0284C7) : AppColors.textSecondary,
                               ),
                             ),
+                          ),
                         ],
                       ),
                       const SizedBox(height: 2),
@@ -427,7 +434,7 @@ class _CustomerDetailsScreenState extends State<CustomerDetailsScreen> {
                         h['desc'] as String,
                         style: const TextStyle(fontSize: 11, color: AppColors.textSecondary, height: 1.3),
                       ),
-                      const SizedBox(height: 10),
+                      const SizedBox(height: 8),
                     ],
                   ),
                 ),
@@ -439,14 +446,12 @@ class _CustomerDetailsScreenState extends State<CustomerDetailsScreen> {
     );
   }
 
-  // 6. Submitted Documents Card
   Widget _buildSubmittedDocumentsCard() {
     final docs = [
-      {'name': 'Aadhaar Card', 'info': 'PDF • 1.2 MB'},
+      {'name': 'Identity Document', 'info': 'PDF • 1.2 MB'},
       {'name': 'PAN Card', 'info': 'PDF • 980 KB'},
-      {'name': 'Salary Slip', 'info': 'PDF • 1.5 MB'},
+      {'name': 'Salary Slip / Income', 'info': 'PDF • 1.5 MB'},
       {'name': 'Bank Statement', 'info': 'PDF • 2.1 MB'},
-      {'name': 'Photograph', 'info': 'JPG • 450 KB'},
     ];
 
     return Container(
@@ -460,18 +465,9 @@ class _CustomerDetailsScreenState extends State<CustomerDetailsScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: const [
-              Text(
-                'Submitted Documents',
-                style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w800, color: AppColors.primary),
-              ),
-              Text(
-                'View All >',
-                style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: Color(0xFF0F3E38)),
-              ),
-            ],
+          const Text(
+            'Required Lead Documents',
+            style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w800, color: AppColors.primary),
           ),
           const SizedBox(height: 12),
           Wrap(
@@ -488,7 +484,7 @@ class _CustomerDetailsScreenState extends State<CustomerDetailsScreen> {
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Icon(Icons.picture_as_pdf_outlined, size: 16, color: Color(0xFFEF4444)),
+                    const Icon(Icons.picture_as_pdf_outlined, size: 16, color: Color(0xFF0284C7)),
                     const SizedBox(width: 6),
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -513,8 +509,7 @@ class _CustomerDetailsScreenState extends State<CustomerDetailsScreen> {
     );
   }
 
-  // Bottom Floating Bar
-  Widget _buildBottomActionBar(BuildContext context, String phone) {
+  Widget _buildBottomActionBar(BuildContext context, String name, String phone) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       decoration: const BoxDecoration(
@@ -525,11 +520,7 @@ class _CustomerDetailsScreenState extends State<CustomerDetailsScreen> {
         children: [
           Expanded(
             child: OutlinedButton.icon(
-              onPressed: () {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('Calling $phone...')),
-                );
-              },
+              onPressed: () => _makeCall(phone),
               icon: const Icon(Icons.phone_outlined, size: 15, color: Color(0xFF0F3E38)),
               label: const Text(
                 'Call Customer',
@@ -544,11 +535,7 @@ class _CustomerDetailsScreenState extends State<CustomerDetailsScreen> {
           ),
           const SizedBox(width: 8),
           OutlinedButton.icon(
-            onPressed: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text('Opening WhatsApp for $phone...')),
-              );
-            },
+            onPressed: () => _openWhatsApp(phone, name),
             icon: const Icon(Icons.chat_bubble_outline_rounded, size: 15, color: Color(0xFF16A36A)),
             label: const Text(
               'WhatsApp',
@@ -592,35 +579,22 @@ class _CustomerDetailsScreenState extends State<CustomerDetailsScreen> {
     required IconData icon,
     required Color iconColor,
     required String title,
-    required VoidCallback onEdit,
   }) {
     return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Row(
-          children: [
-            Container(
-              width: 26,
-              height: 26,
-              decoration: BoxDecoration(
-                color: iconColor.withValues(alpha: 0.12),
-                borderRadius: BorderRadius.circular(6),
-              ),
-              child: Icon(icon, size: 16, color: iconColor),
-            ),
-            const SizedBox(width: 8),
-            Text(
-              title,
-              style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w800, color: AppColors.primary),
-            ),
-          ],
-        ),
-        InkWell(
-          onTap: onEdit,
-          child: const Text(
-            'Edit',
-            style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Color(0xFF0F3E38)),
+        Container(
+          width: 26,
+          height: 26,
+          decoration: BoxDecoration(
+            color: iconColor.withValues(alpha: 0.12),
+            borderRadius: BorderRadius.circular(6),
           ),
+          child: Icon(icon, size: 16, color: iconColor),
+        ),
+        const SizedBox(width: 8),
+        Text(
+          title,
+          style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w800, color: AppColors.primary),
         ),
       ],
     );

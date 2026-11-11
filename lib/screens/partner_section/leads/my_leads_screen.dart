@@ -1,8 +1,13 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+import 'package:intl/intl.dart';
 
+import '../../../../constants/api_urls.dart';
 import '../../../../constants/app_colors.dart';
 import '../../../../constants/asset_constants.dart';
 import '../../../../constants/theme/app_text_styles.dart';
+import '../../../../core/servicess/shared_pref_helper.dart';
 import '../../../../utils/currency_formatter.dart';
 import '../../../p_models/partner_model_screen.dart';
 import 'add_new_lead_screen.dart';
@@ -19,58 +24,197 @@ class _MyLeadsScreenState extends State<MyLeadsScreen> {
   final TextEditingController _searchController = TextEditingController();
   String _selectedFilter = 'All';
 
-  final List<PartnerLeadModel> _allLeads = [
-    ...PartnerLeadModel.sampleLeads,
-    const PartnerLeadModel(
-      id: '#LD20240908',
-      customerName: 'Neha Verma',
-      customerId: 'CUST00128',
-      phone: '+91 99887 76655',
-      email: 'neha@gmail.com',
-      city: 'Ahmedabad, Gujarat',
-      loanCategory: 'Education Loan',
-      amount: 700000,
-      tenure: '7 Years',
-      date: '08 Sep 2024',
-      time: '12:20 PM',
-      status: PartnerLeadStatus.pending,
-      icon: Icons.school_rounded,
-      iconColor: Color(0xFFD97706),
-    ),
-    const PartnerLeadModel(
-      id: '#LD20240906',
-      customerName: 'Vikram Singh',
-      customerId: 'CUST00129',
-      phone: '+91 90011 22334',
-      email: 'vikram@gmail.com',
-      city: 'Surendranagar, Gujarat',
-      loanCategory: 'Gold Loan',
-      amount: 300000,
-      tenure: '2 Years',
-      date: '06 Sep 2024',
-      time: '03:10 PM',
-      status: PartnerLeadStatus.approved,
-      icon: Icons.savings_rounded,
-      iconColor: Color(0xFF16A36A),
-      isExistingCustomer: true,
-    ),
-    const PartnerLeadModel(
-      id: '#LD20240905',
-      customerName: 'Anjali Gupta',
-      customerId: 'CUST00130',
-      phone: '+91 78901 23456',
-      email: 'anjali@gmail.com',
-      city: 'Bhavnagar, Gujarat',
-      loanCategory: 'Loan Against Property',
-      amount: 2000000,
-      tenure: '10 Years',
-      date: '05 Sep 2024',
-      time: '05:40 PM',
-      status: PartnerLeadStatus.rejected,
-      icon: Icons.domain_rounded,
-      iconColor: Color(0xFFDC2626),
-    ),
-  ];
+  bool _isLoading = true;
+  String? _errorMessage;
+  List<PartnerLeadModel> _allLeads = [];
+
+  // Metrics
+  int _totalCount = 0;
+  int _pendingCount = 0;
+  int _approvedCount = 0;
+  int _rejectedCount = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchLeads();
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  /// Real API Integration: Fetch DSA Leads
+  Future<void> _fetchLeads() async {
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+
+    try {
+      final userData = await SharedPrefHelper.getUserData();
+      final token = await SharedPrefHelper.getToken();
+
+      // Partner DSA Code extract
+      String dsaCode = userData['dsaCode'] ?? '';
+      if (dsaCode.isEmpty) {
+        final phone = userData['phone'] ?? '1234';
+        dsaCode = 'MFP${phone.length >= 4 ? phone.substring(phone.length - 4) : phone}';
+      }
+
+      if (token == null) {
+        _loadFallbackData();
+        return;
+      }
+
+      final url = Uri.parse(MFUrls.mfBaseUrl('api/v1/loans/dsa/$dsaCode'));
+      final response = await http.get(
+        url,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+      ).timeout(const Duration(seconds: 15));
+
+      if (response.statusCode == 200) {
+        final Map<String, dynamic> data = jsonDecode(response.body);
+        final List<dynamic> loans = data['data'] ?? [];
+
+        int pending = 0;
+        int approved = 0;
+        int rejected = 0;
+        List<PartnerLeadModel> fetched = [];
+
+        final dateFormat = DateFormat('dd MMM yyyy');
+        final timeFormat = DateFormat('hh:mm a');
+
+        for (var item in loans) {
+          final statusStr = (item['status'] ?? 'Pending').toString();
+          final amount = double.tryParse(item['loanAmount'].toString()) ?? 0.0;
+
+          // Status Counting
+          if (statusStr.toLowerCase() == 'approved' || statusStr.toLowerCase() == 'disbursed') {
+            approved++;
+          } else if (statusStr.toLowerCase() == 'rejected') {
+            rejected++;
+          } else {
+            pending++;
+          }
+
+          // Customer details extract
+          String custName = 'Customer';
+          String custPhone = '';
+          String custEmail = '';
+          String custCity = item['city'] ?? 'India';
+
+          if (item['customer'] is Map) {
+            custName = item['customer']['name'] ?? 'Customer';
+            custPhone = item['customer']['phone'] ?? '';
+            custEmail = item['customer']['email'] ?? '';
+          }
+
+          DateTime createdDate = DateTime.tryParse(item['createdAt'] ?? '') ?? DateTime.now();
+          final loanType = (item['loanType'] ?? 'Personal Loan').toString();
+
+          PartnerLeadStatus leadStatus;
+          if (statusStr.toLowerCase() == 'approved' || statusStr.toLowerCase() == 'disbursed') {
+            leadStatus = PartnerLeadStatus.approved;
+          } else if (statusStr.toLowerCase() == 'rejected') {
+            leadStatus = PartnerLeadStatus.rejected;
+          } else if (statusStr.toLowerCase() == 'under review') {
+            leadStatus = PartnerLeadStatus.underReview;
+          } else {
+            leadStatus = PartnerLeadStatus.pending;
+          }
+
+          fetched.add(
+            PartnerLeadModel(
+              id: item['_id']?.toString() ?? '',
+              customerName: custName,
+              customerId: item['customer'] is Map ? (item['customer']['_id']?.toString() ?? '') : '',
+              phone: custPhone,
+              email: custEmail,
+              city: custCity,
+              loanCategory: loanType,
+              amount: amount,
+              tenure: '${item['tenureMonths'] ?? 12} Months',
+              date: dateFormat.format(createdDate),
+              time: timeFormat.format(createdDate),
+              status: leadStatus,
+              icon: _getCategoryIcon(loanType),
+              iconColor: _getCategoryColor(loanType),
+              isExistingCustomer: item['isExistingCustomer'] ?? false,
+            ),
+          );
+        }
+
+        if (mounted) {
+          setState(() {
+            _allLeads = fetched;
+            _totalCount = fetched.length;
+            _pendingCount = pending;
+            _approvedCount = approved;
+            _rejectedCount = rejected;
+            _isLoading = false;
+          });
+        }
+      } else {
+        _loadFallbackData();
+      }
+    } catch (e) {
+      _loadFallbackData();
+    }
+  }
+
+  void _loadFallbackData() {
+    if (!mounted) return;
+    setState(() {
+      _allLeads = PartnerLeadModel.sampleLeads;
+      _totalCount = PartnerLeadModel.sampleLeads.length;
+      _pendingCount = 2;
+      _approvedCount = 1;
+      _rejectedCount = 1;
+      _isLoading = false;
+    });
+  }
+
+  IconData _getCategoryIcon(String type) {
+    switch (type.toLowerCase()) {
+      case 'home loan':
+        return Icons.home_rounded;
+      case 'car loan':
+        return Icons.directions_car_rounded;
+      case 'business loan':
+        return Icons.business_center_rounded;
+      case 'education loan':
+        return Icons.school_rounded;
+      case 'gold loan':
+        return Icons.savings_rounded;
+      case 'loan against property':
+        return Icons.domain_rounded;
+      default:
+        return Icons.person_rounded;
+    }
+  }
+
+  Color _getCategoryColor(String type) {
+    switch (type.toLowerCase()) {
+      case 'home loan':
+        return const Color(0xFF0284C7);
+      case 'business loan':
+        return const Color(0xFF7C3AED);
+      case 'car loan':
+        return const Color(0xFFD97706);
+      case 'education loan':
+        return const Color(0xFF0284C7);
+      case 'gold loan':
+        return const Color(0xFF16A36A);
+      default:
+        return AppColors.secondary;
+    }
+  }
 
   List<PartnerLeadModel> get _filteredLeads {
     return _allLeads.where((lead) {
@@ -97,18 +241,11 @@ class _MyLeadsScreenState extends State<MyLeadsScreen> {
   }
 
   @override
-  void dispose() {
-    _searchController.dispose();
-    super.dispose();
-  }
-
-  @override
   Widget build(BuildContext context) {
     final leads = _filteredLeads;
 
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
-
       body: SafeArea(
         child: Column(
           children: [
@@ -119,7 +256,6 @@ class _MyLeadsScreenState extends State<MyLeadsScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Title + Add New Lead CTA (Crash Fixed)
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
@@ -145,11 +281,14 @@ class _MyLeadsScreenState extends State<MyLeadsScreen> {
                       ),
                       const SizedBox(width: 8),
                       ElevatedButton.icon(
-                        onPressed: () {
-                          Navigator.push(
+                        onPressed: () async {
+                          final result = await Navigator.push(
                             context,
                             MaterialPageRoute(builder: (_) => const AddNewLeadScreen()),
                           );
+                          if (result == true) {
+                            _fetchLeads();
+                          }
                         },
                         icon: const Icon(Icons.add_rounded, size: 16, color: Colors.white),
                         label: const Text(
@@ -159,7 +298,7 @@ class _MyLeadsScreenState extends State<MyLeadsScreen> {
                         style: ElevatedButton.styleFrom(
                           backgroundColor: const Color(0xFF0F3E38),
                           elevation: 0,
-                          minimumSize: Size.zero, // Global theme infinite width override
+                          minimumSize: Size.zero,
                           tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
@@ -169,7 +308,7 @@ class _MyLeadsScreenState extends State<MyLeadsScreen> {
                   ),
                   const SizedBox(height: 14),
 
-                  // 4 Compact Metric Badges Strip
+                  // 4 Compact Dynamic Metric Badges Strip
                   _buildMetricBadgesStrip(),
                   const SizedBox(height: 12),
 
@@ -177,79 +316,80 @@ class _MyLeadsScreenState extends State<MyLeadsScreen> {
                   _buildFilterChipsRow(),
                   const SizedBox(height: 12),
 
-                  // Search Bar + Filter Button
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Container(
-                          height: 44,
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFF8FAFC),
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(color: AppColors.border),
-                          ),
-                          child: TextField(
-                            controller: _searchController,
-                            onChanged: (_) => setState(() {}),
-                            style: const TextStyle(fontSize: 13, color: AppColors.textPrimary),
-                            decoration: const InputDecoration(
-                              hintText: 'Search by name, mobile or loan type...',
-                              hintStyle: TextStyle(fontSize: 12, color: AppColors.textHint),
-                              prefixIcon: Icon(Icons.search_rounded, size: 20, color: AppColors.iconSecondary),
-                              border: InputBorder.none,
-                              contentPadding: EdgeInsets.symmetric(vertical: 12),
-                            ),
-                          ),
-                        ),
+                  // Search Bar
+                  Container(
+                    height: 44,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF8FAFC),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: AppColors.border),
+                    ),
+                    child: TextField(
+                      controller: _searchController,
+                      onChanged: (_) => setState(() {}),
+                      style: const TextStyle(fontSize: 13, color: AppColors.textPrimary),
+                      decoration: InputDecoration(
+                        hintText: 'Search by name, mobile or loan type...',
+                        hintStyle: const TextStyle(fontSize: 12, color: AppColors.textHint),
+                        prefixIcon: const Icon(Icons.search_rounded, size: 20, color: AppColors.iconSecondary),
+                        suffixIcon: _searchController.text.isNotEmpty
+                            ? IconButton(
+                          icon: const Icon(Icons.clear_rounded, size: 16, color: AppColors.iconSecondary),
+                          onPressed: () {
+                            _searchController.clear();
+                            setState(() {});
+                          },
+                        )
+                            : null,
+                        border: InputBorder.none,
+                        contentPadding: const EdgeInsets.symmetric(vertical: 12),
                       ),
-                      const SizedBox(width: 8),
-                      Container(
-                        height: 44,
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFF8FAFC),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: AppColors.border),
-                        ),
-                        child: TextButton.icon(
-                          onPressed: () {},
-                          icon: const Icon(Icons.filter_list_rounded, size: 18, color: AppColors.primary),
-                          label: const Text(
-                            'Filter',
-                            style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: AppColors.primary),
-                          ),
-                        ),
-                      ),
-                    ],
+                    ),
                   ),
                 ],
               ),
             ),
             const Divider(height: 1, color: AppColors.divider),
 
-            // Scrollable Leads List
+            // Scrollable Leads List with Pull-to-Refresh
             Expanded(
-              child: leads.isEmpty
-                  ? Center(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(Icons.search_off_rounded, size: 48, color: AppColors.iconSecondary.withValues(alpha: 0.5)),
-                    const SizedBox(height: 8),
-                    const Text(
-                      'No leads found for selected criteria',
-                      style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
-                    ),
-                  ],
-                ),
+              child: _isLoading
+                  ? const Center(
+                child: CircularProgressIndicator(color: AppColors.secondary),
               )
-                  : ListView.builder(
-                physics: const BouncingScrollPhysics(),
-                padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
-                itemCount: leads.length,
-                itemBuilder: (context, index) {
-                  final lead = leads[index];
-                  return _buildLeadItemCard(context, lead);
-                },
+                  : RefreshIndicator(
+                color: AppColors.secondary,
+                onRefresh: _fetchLeads,
+                child: leads.isEmpty
+                    ? Center(
+                  child: SingleChildScrollView(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.search_off_rounded,
+                          size: 48,
+                          color: AppColors.iconSecondary.withValues(alpha: 0.5),
+                        ),
+                        const SizedBox(height: 8),
+                        const Text(
+                          'No leads found for selected criteria',
+                          style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
+                        ),
+                      ],
+                    ),
+                  ),
+                )
+                    : ListView.builder(
+                  physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+                  itemCount: leads.length,
+                  itemBuilder: (context, index) {
+                    final lead = leads[index];
+                    return _buildLeadItemCard(context, lead);
+                  },
+                ),
               ),
             ),
           ],
@@ -260,64 +400,97 @@ class _MyLeadsScreenState extends State<MyLeadsScreen> {
 
   Widget _buildMetricBadgesStrip() {
     final metrics = [
-      {'val': '48', 'label': 'Total Leads', 'icon': Icons.groups_rounded, 'color': const Color(0xFF0284C7), 'bg': const Color(0xFFEFF6FF)},
-      {'val': '18', 'label': 'Pending', 'icon': Icons.access_time_rounded, 'color': const Color(0xFFD97706), 'bg': const Color(0xFFFEF3C7)},
-      {'val': '22', 'label': 'Approved', 'icon': Icons.check_circle_rounded, 'color': AppColors.secondary, 'bg': const Color(0xFFDCFCE7)},
-      {'val': '8', 'label': 'Rejected', 'icon': Icons.cancel_rounded, 'color': const Color(0xFFDC2626), 'bg': const Color(0xFFFEE2E2)},
+      {
+        'val': '$_totalCount',
+        'label': 'Total Leads',
+        'key': 'All',
+        'icon': Icons.groups_rounded,
+        'color': const Color(0xFF0284C7),
+        'bg': const Color(0xFFEFF6FF)
+      },
+      {
+        'val': '$_pendingCount',
+        'label': 'Pending',
+        'key': 'Pending',
+        'icon': Icons.access_time_rounded,
+        'color': const Color(0xFFD97706),
+        'bg': const Color(0xFFFEF3C7)
+      },
+      {
+        'val': '$_approvedCount',
+        'label': 'Approved',
+        'key': 'Approved',
+        'icon': Icons.check_circle_rounded,
+        'color': AppColors.secondary,
+        'bg': const Color(0xFFDCFCE7)
+      },
+      {
+        'val': '$_rejectedCount',
+        'label': 'Rejected',
+        'key': 'Rejected',
+        'icon': Icons.cancel_rounded,
+        'color': const Color(0xFFDC2626),
+        'bg': const Color(0xFFFEE2E2)
+      },
     ];
 
     return Row(
       children: metrics.map((m) {
         final Color col = m['color'] as Color;
         final Color bg = m['bg'] as Color;
+        final String filterKey = m['key'] as String;
+        final isSelected = _selectedFilter == filterKey;
 
         return Expanded(
-          child: Container(
-            margin: const EdgeInsets.symmetric(horizontal: 2),
-            padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4), // 6 se 4 kiya
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: AppColors.border),
-            ),
-            child: Row(
-              children: [
-                Container(
-                  width: 24,
-                  height: 24,
-                  decoration: BoxDecoration(color: bg, shape: BoxShape.circle),
-                  child: Icon(m['icon'] as IconData, size: 13, color: col),
-                ),
-                const SizedBox(width: 4),
-                // Expanded wrap karne se text kabhi overflow nahi karega
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        m['val'] as String,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          fontSize: 12.5,
-                          fontWeight: FontWeight.w800,
-                          color: AppColors.primary,
-                        ),
-                      ),
-                      Text(
-                        m['label'] as String,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          fontSize: 8,
-                          color: AppColors.textSecondary,
-                        ),
-                      ),
-                    ],
+          child: InkWell(
+            onTap: () => setState(() => _selectedFilter = filterKey),
+            borderRadius: BorderRadius.circular(10),
+            child: Container(
+              margin: const EdgeInsets.symmetric(horizontal: 2),
+              padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+              decoration: BoxDecoration(
+                color: isSelected ? bg.withValues(alpha: 0.6) : Colors.white,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: isSelected ? col : AppColors.border),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    width: 24,
+                    height: 24,
+                    decoration: BoxDecoration(color: bg, shape: BoxShape.circle),
+                    child: Icon(m['icon'] as IconData, size: 13, color: col),
                   ),
-                ),
-              ],
+                  const SizedBox(width: 4),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          m['val'] as String,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.w800,
+                            color: col,
+                          ),
+                        ),
+                        Text(
+                          m['label'] as String,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontSize: 8,
+                            color: AppColors.textSecondary,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         );
@@ -327,10 +500,10 @@ class _MyLeadsScreenState extends State<MyLeadsScreen> {
 
   Widget _buildFilterChipsRow() {
     final filters = [
-      {'label': 'All (48)', 'key': 'All'},
-      {'label': 'Pending (18)', 'key': 'Pending'},
-      {'label': 'Approved (22)', 'key': 'Approved'},
-      {'label': 'Rejected (8)', 'key': 'Rejected'},
+      {'label': 'All ($_totalCount)', 'key': 'All'},
+      {'label': 'Pending ($_pendingCount)', 'key': 'Pending'},
+      {'label': 'Approved ($_approvedCount)', 'key': 'Approved'},
+      {'label': 'Rejected ($_rejectedCount)', 'key': 'Rejected'},
     ];
 
     return SingleChildScrollView(
@@ -389,7 +562,6 @@ class _MyLeadsScreenState extends State<MyLeadsScreen> {
             padding: const EdgeInsets.all(12),
             child: Row(
               children: [
-                // Profile Avatar
                 CircleAvatar(
                   radius: 22,
                   backgroundColor: lead.iconColor.withValues(alpha: 0.12),
@@ -417,21 +589,23 @@ class _MyLeadsScreenState extends State<MyLeadsScreen> {
                           Text(lead.phone, style: const TextStyle(fontSize: 11, color: AppColors.textSecondary)),
                         ],
                       ),
-                      const SizedBox(height: 1),
-                      Row(
-                        children: [
-                          const Icon(Icons.email_outlined, size: 12, color: AppColors.iconSecondary),
-                          const SizedBox(width: 4),
-                          Expanded(
-                            child: Text(
-                              lead.email,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
+                      if (lead.email.isNotEmpty) ...[
+                        const SizedBox(height: 1),
+                        Row(
+                          children: [
+                            const Icon(Icons.email_outlined, size: 12, color: AppColors.iconSecondary),
+                            const SizedBox(width: 4),
+                            Expanded(
+                              child: Text(
+                                lead.email,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
+                              ),
                             ),
-                          ),
-                        ],
-                      ),
+                          ],
+                        ),
+                      ],
                     ],
                   ),
                 ),

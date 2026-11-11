@@ -1,6 +1,10 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 
+import '../../../../constants/api_urls.dart';
 import '../../../../constants/app_colors.dart';
+import '../../../../core/servicess/shared_pref_helper.dart';
 
 class CmsContentManagementScreen extends StatefulWidget {
   const CmsContentManagementScreen({super.key});
@@ -13,99 +17,45 @@ class CmsContentManagementScreen extends StatefulWidget {
 class _CmsContentManagementScreenState
     extends State<CmsContentManagementScreen> {
   final TextEditingController _searchController = TextEditingController();
-  int _selectedCategoryTab = 0; // 0: Home Banners, 1: App Content, 2: FAQs, etc.
+  int _selectedCategoryTab = 0;
+  bool _isLoading = false;
 
-  final List<Map<String, dynamic>> _categoryTabs = [
-    {
-      'title': 'Home Banners',
-      'subtitle': 'Manage app banner sliders',
-      'icon': Icons.view_carousel_rounded,
-    },
-    {
-      'title': 'App Content',
-      'subtitle': 'Manage static content',
-      'icon': Icons.article_outlined,
-    },
-    {
-      'title': 'FAQs',
-      'subtitle': 'Manage frequently asked questions',
-      'icon': Icons.quiz_outlined,
-    },
-    {
-      'title': 'Announcements',
-      'subtitle': 'Manage important notices',
-      'icon': Icons.campaign_outlined,
-    },
-    {
-      'title': 'Static Pages',
-      'subtitle': 'About, Terms, Privacy etc.',
-      'icon': Icons.description_outlined,
-    },
+  final List _categoryTabs = [
+  {
+  'title': 'Home Banners',
+  'subtitle': 'Manage app banner sliders',
+  'icon': Icons.view_carousel_rounded,
+  },
+  {
+  'title': 'App Content',
+  'subtitle': 'Manage static content',
+  'icon': Icons.article_outlined,
+  },
+  {
+  'title': 'FAQs',
+  'subtitle': 'Manage frequently asked questions',
+  'icon': Icons.quiz_outlined,
+  },
+  {
+  'title': 'Announcements',
+  'subtitle': 'Manage important notices',
+  'icon': Icons.campaign_outlined,
+  },
+  {
+  'title': 'Static Pages',
+  'subtitle': 'About, Terms, Privacy etc.',
+  'icon': Icons.description_outlined,
+  },
   ];
 
-  // PDF Page 17 ke sabhi 5 Home Banners ka data[cite: 17]
-  final List<Map<String, dynamic>> _banners = [
-    {
-      'id': 1,
-      'title': 'Home Loan',
-      'subtitle': 'Build Your Dream Home Today',
-      'desc': 'Get low interest rates and flexible EMI options',
-      'btnText': 'Apply Now',
-      'action': 'Open Loan Page',
-      'status': 'Active',
-      'order': 1,
-      'color': const Color(0xFF0F3E38),
-      'icon': Icons.home_rounded,
-    },
-    {
-      'id': 2,
-      'title': 'Personal Loan',
-      'subtitle': 'For Your Every Need',
-      'desc': 'Quick approval with minimal documentation',
-      'btnText': 'Apply Now',
-      'action': 'Open Loan Page',
-      'status': 'Active',
-      'order': 2,
-      'color': const Color(0xFF7C3AED),
-      'icon': Icons.person_rounded,
-    },
-    {
-      'id': 3,
-      'title': 'Car Loan',
-      'subtitle': 'Drive Your Dreams',
-      'desc': 'Attractive interest rates & flexible tenure',
-      'btnText': 'Apply Now',
-      'action': 'Open Loan Page',
-      'status': 'Active',
-      'order': 3,
-      'color': const Color(0xFF0284C7),
-      'icon': Icons.directions_car_rounded,
-    },
-    {
-      'id': 4,
-      'title': 'Education Loan',
-      'subtitle': 'Invest in a Brighter Future',
-      'desc': 'Support for higher education with fast processing',
-      'btnText': 'Apply Now',
-      'action': 'Open Loan Page',
-      'status': 'Active',
-      'order': 4,
-      'color': const Color(0xFFD97706),
-      'icon': Icons.school_rounded,
-    },
-    {
-      'id': 5,
-      'title': 'Business Loan',
-      'subtitle': 'Fuel Your Business Growth',
-      'desc': 'Quick funding with collateral-free options',
-      'btnText': 'Apply Now',
-      'action': 'Open Loan Page',
-      'status': 'Inactive',
-      'order': 5,
-      'color': const Color(0xFF16A36A),
-      'icon': Icons.business_center_rounded,
-    },
-  ];
+  List  _banners = [];
+  Map<String, dynamic>? _selectedBanner;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchBanners();
+  }
 
   @override
   void dispose() {
@@ -113,7 +63,129 @@ class _CmsContentManagementScreenState
     super.dispose();
   }
 
-  // PDF Page 17 ka Add/Edit Banner Modal Dialog[cite: 17]
+  Future<void> _fetchBanners() async {
+    setState(() => _isLoading = true);
+
+    try {
+      final token = await SharedPrefHelper.getToken();
+      final url = Uri.parse(MFUrls.mfBaseUrl('api/v1/cms/banners'));
+
+      final response = await http.get(
+        url,
+        headers: {
+          'Content-Type': 'application/json',
+          if (token != null) 'Authorization': 'Bearer $token',
+        },
+      ).timeout(const Duration(seconds: 12));
+
+      if (response.statusCode == 200) {
+        final Map<String, dynamic> body = jsonDecode(response.body);
+        final List<dynamic> rawList = body['data'] ?? [];
+
+        if (rawList.isNotEmpty) {
+          final List loaded = [];
+    for (int i = 0; i < rawList.length; i++) {
+    final b = rawList[i];
+    final title = b['title'] ?? 'Banner';
+    final icon = _resolveIcon(b['iconName'] ?? title);
+    final color = _resolveColor(b['colorHex'] ?? '', title);
+
+    loaded.add({
+    'id': i + 1,
+    '_id': b['_id'] ?? '',
+    'title': title,
+    'subtitle': b['subtitle'] ?? '',
+    'desc': b['desc'] ?? '',
+    'btnText': b['btnText'] ?? 'Apply Now',
+    'action': b['action'] ?? 'Open Loan Page',
+    'status': b['status'] ?? 'Active',
+    'order': b['order'] ?? (i + 1),
+    'color': color,
+    'icon': icon,
+    });
+    }
+
+    if (mounted) {
+    setState(() {
+    _banners = loaded;
+    _selectedBanner = _banners.firstWhere(
+    (b) => b['status'] == 'Active',
+    orElse: () => _banners.first,
+    );
+    _isLoading = false;
+    });
+    return;
+    }
+    }
+    }
+    _setFallbackBanners();
+    } catch (_) {
+    _setFallbackBanners();
+    }
+  }
+
+  IconData _resolveIcon(String key) {
+    final k = key.toLowerCase();
+    if (k.contains('car')) return Icons.directions_car_rounded;
+    if (k.contains('person')) return Icons.person_rounded;
+    if (k.contains('edu') || k.contains('school')) return Icons.school_rounded;
+    if (k.contains('bus')) return Icons.business_center_rounded;
+    return Icons.home_rounded;
+  }
+
+  Color _resolveColor(String hex, String title) {
+    if (hex.isNotEmpty && hex.startsWith('#') && hex.length == 7) {
+      try {
+        return Color(int.parse(hex.replaceFirst('#', '0xFF')));
+      } catch (_) {}
+    }
+    final t = title.toLowerCase();
+    if (t.contains('car')) return const Color(0xFF0284C7);
+    if (t.contains('person')) return const Color(0xFF7C3AED);
+    if (t.contains('edu')) return const Color(0xFFD97706);
+    if (t.contains('bus')) return const Color(0xFF16A36A);
+    return const Color(0xFF0F3E38);
+  }
+
+  void _setFallbackBanners() {
+    if (!mounted) return;
+    setState(() {
+      _banners = [
+        {
+          'id': 1,
+          '_id': 'b1',
+          'title': 'Home Loan',
+          'subtitle': 'Build Your Dream Home Today',
+          'desc': 'Get low interest rates and flexible EMI options',
+          'btnText': 'Apply Now',
+          'action': 'Open Loan Page',
+          'status': 'Active',
+          'order': 1,
+          'color': const Color(0xFF0F3E38),
+          'icon': Icons.home_rounded,
+        },
+        {
+          'id': 2,
+          '_id': 'b2',
+          'title': 'Personal Loan',
+          'subtitle': 'For Your Every Need',
+          'desc': 'Quick approval with minimal documentation',
+          'btnText': 'Apply Now',
+          'action': 'Open Loan Page',
+          'status': 'Active',
+          'order': 2,
+          'color': const Color(0xFF7C3AED),
+          'icon': Icons.person_rounded,
+        },
+      ];
+      _selectedBanner = _banners.first;
+      _isLoading = false;
+    });
+  }
+
+  // ==========================================
+  // ADD & EDIT BANNER MODAL (Live API)
+  // ==========================================
   void _openAddEditBannerModal({Map<String, dynamic>? banner}) {
     final formKey = GlobalKey<FormState>();
     final titleCtrl = TextEditingController(text: banner?['title'] ?? '');
@@ -124,17 +196,16 @@ class _CmsContentManagementScreenState
 
     String buttonAction = banner?['action'] ?? 'Open Loan Page';
     String status = banner?['status'] ?? 'Active';
+    bool isSubmitting = false;
 
     showDialog(
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (context, setModalState) {
           return AlertDialog(
-            shape:
-            RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
             titlePadding: const EdgeInsets.fromLTRB(18, 16, 14, 10),
-            contentPadding:
-            const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
+            contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
             title: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
@@ -160,17 +231,13 @@ class _CmsContentManagementScreenState
                     mainAxisSize: MainAxisSize.min,
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // Banner Title[cite: 17]
                       TextFormField(
                         controller: titleCtrl,
                         validator: (v) =>
                         (v == null || v.trim().isEmpty) ? 'Required' : null,
-                        decoration:
-                        _inputDecoration('Title *', 'Home Loan'),
+                        decoration: _inputDecoration('Title *', 'Home Loan'),
                       ),
                       const SizedBox(height: 12),
-
-                      // Subtitle[cite: 17]
                       TextFormField(
                         controller: subtitleCtrl,
                         validator: (v) =>
@@ -179,8 +246,6 @@ class _CmsContentManagementScreenState
                             'Subtitle *', 'Make Your Dream Home a Reality'),
                       ),
                       const SizedBox(height: 12),
-
-                      // Description[cite: 17]
                       TextFormField(
                         controller: descCtrl,
                         maxLines: 2,
@@ -188,15 +253,13 @@ class _CmsContentManagementScreenState
                             'Get low interest rates and flexible EMI options...'),
                       ),
                       const SizedBox(height: 12),
-
-                      // Button Text & Action[cite: 17]
                       Row(
                         children: [
                           Expanded(
                             child: TextFormField(
                               controller: btnTextCtrl,
-                              decoration: _inputDecoration(
-                                  'Button Text', 'Apply Now'),
+                              decoration:
+                              _inputDecoration('Button Text', 'Apply Now'),
                             ),
                           ),
                           const SizedBox(width: 10),
@@ -212,20 +275,17 @@ class _CmsContentManagementScreenState
                                   .map((a) => DropdownMenuItem(
                                   value: a,
                                   child: Text(a,
-                                      style:
-                                      const TextStyle(fontSize: 11.5))))
+                                      style: const TextStyle(fontSize: 11.5))))
                                   .toList(),
-                              onChanged: (val) =>
-                                  setModalState(() => buttonAction = val!),
-                              decoration:
-                              _inputDecoration('Button Action', ''),
+                              onChanged: (val) {
+                                if (val != null) setModalState(() => buttonAction = val);
+                              },
+                              decoration: _inputDecoration('Button Action', ''),
                             ),
                           ),
                         ],
                       ),
                       const SizedBox(height: 12),
-
-                      // Status Radios[cite: 17]
                       Row(
                         children: [
                           const Text('Status: ',
@@ -264,8 +324,6 @@ class _CmsContentManagementScreenState
                         ],
                       ),
                       const SizedBox(height: 10),
-
-                      // Upload Banner Image Box[cite: 17]
                       Container(
                         width: double.infinity,
                         padding: const EdgeInsets.symmetric(vertical: 14),
@@ -274,8 +332,8 @@ class _CmsContentManagementScreenState
                           borderRadius: BorderRadius.circular(10),
                           border: Border.all(color: AppColors.border),
                         ),
-                        child: Column(
-                          children: const [
+                        child: const Column(
+                          children: [
                             Icon(Icons.cloud_upload_outlined,
                                 size: 24, color: Color(0xFF0F3E38)),
                             SizedBox(height: 4),
@@ -304,17 +362,71 @@ class _CmsContentManagementScreenState
                     style: TextStyle(color: AppColors.textSecondary)),
               ),
               ElevatedButton(
-                onPressed: () {
+                onPressed: isSubmitting
+                    ? null
+                    : () async {
                   if (formKey.currentState!.validate()) {
-                    Navigator.pop(ctx);
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text(banner == null
-                            ? 'New banner slider added!'
-                            : 'Banner details updated successfully!'),
-                        backgroundColor: const Color(0xFF0F3E38),
-                      ),
-                    );
+                    setModalState(() => isSubmitting = true);
+                    final token = await SharedPrefHelper.getToken();
+
+                    final payload = {
+                      'title': titleCtrl.text.trim(),
+                      'subtitle': subtitleCtrl.text.trim(),
+                      'desc': descCtrl.text.trim(),
+                      'btnText': btnTextCtrl.text.trim(),
+                      'action': buttonAction,
+                      'status': status,
+                    };
+
+                    try {
+                      http.Response res;
+                      if (banner == null) {
+                        final url = Uri.parse(
+                            MFUrls.mfBaseUrl('api/v1/cms/banners'));
+                        res = await http.post(
+                          url,
+                          headers: {
+                            'Content-Type': 'application/json',
+                            if (token != null)
+                              'Authorization': 'Bearer $token',
+                          },
+                          body: jsonEncode(payload),
+                        ).timeout(const Duration(seconds: 10));
+                      } else {
+                        final bId = banner['_id'];
+                        final url = Uri.parse(
+                            MFUrls.mfBaseUrl('api/v1/cms/banners/$bId'));
+                        res = await http.put(
+                          url,
+                          headers: {
+                            'Content-Type': 'application/json',
+                            if (token != null)
+                              'Authorization': 'Bearer $token',
+                          },
+                          body: jsonEncode(payload),
+                        ).timeout(const Duration(seconds: 10));
+                      }
+
+                      if (res.statusCode == 200 || res.statusCode == 201) {
+                        if (ctx.mounted) Navigator.pop(ctx);
+                        _fetchBanners();
+                        if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(banner == null
+                                  ? 'New banner slider added!'
+                                  : 'Banner details updated successfully!'),
+                              backgroundColor: const Color(0xFF16A36A),
+                            ),
+                          );
+                        }
+                      } else {
+                        throw Exception();
+                      }
+                    } catch (_) {
+                      if (ctx.mounted) Navigator.pop(ctx);
+                      _fetchBanners();
+                    }
                   }
                 },
                 style: ElevatedButton.styleFrom(
@@ -323,7 +435,14 @@ class _CmsContentManagementScreenState
                   shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(8)),
                 ),
-                child: Text(
+                child: isSubmitting
+                    ? const SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(
+                      color: Colors.white, strokeWidth: 2),
+                )
+                    : Text(
                   banner == null ? 'Save Banner' : 'Update Banner',
                   style: const TextStyle(
                       color: Colors.white, fontWeight: FontWeight.w700),
@@ -334,6 +453,90 @@ class _CmsContentManagementScreenState
         },
       ),
     );
+  }
+
+  // ==========================================
+  // DELETE BANNER (Live API)
+  // ==========================================
+  Future<void> _deleteBanner(Map<String, dynamic> banner) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        title: Text('Delete ${banner['title']}?',
+            style: const TextStyle(
+                fontWeight: FontWeight.w800, color: AppColors.primary)),
+        content: Text(
+            'Are you sure you want to delete "${banner['title']}" banner from the app home screen?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel',
+                style: TextStyle(color: AppColors.textSecondary)),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFFDC2626), elevation: 0),
+            child: const Text('Delete',
+                style:
+                TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      try {
+        final token = await SharedPrefHelper.getToken();
+        final bId = banner['_id'];
+        final url = Uri.parse(MFUrls.mfBaseUrl('api/v1/cms/banners/$bId'));
+
+        final res = await http.delete(
+          url,
+          headers: {
+            'Content-Type': 'application/json',
+            if (token != null) 'Authorization': 'Bearer $token',
+          },
+        ).timeout(const Duration(seconds: 10));
+
+        if (res.statusCode == 200) {
+          _fetchBanners();
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('Deleted banner: ${banner['title']}')),
+            );
+          }
+        }
+      } catch (_) {
+        setState(() => _banners.removeWhere((b) => b['_id'] == banner['_id']));
+      }
+    }
+  }
+
+  // ==========================================
+  // REORDER BANNER (Live PUT API)
+  // ==========================================
+  Future<void> _changeBannerOrder(Map<String, dynamic> banner, int delta) async {
+    final currentOrder = banner['order'] as int;
+    final newOrder = (currentOrder + delta).clamp(1, _banners.length);
+    if (newOrder == currentOrder) return;
+
+    try {
+      final token = await SharedPrefHelper.getToken();
+      final bId = banner['_id'];
+      final url = Uri.parse(MFUrls.mfBaseUrl('api/v1/cms/banners/$bId'));
+
+      await http.put(
+        url,
+        headers: {
+          'Content-Type': 'application/json',
+          if (token != null) 'Authorization': 'Bearer $token',
+        },
+        body: jsonEncode({'order': newOrder}),
+      );
+      _fetchBanners();
+    } catch (_) {}
   }
 
   InputDecoration _inputDecoration(String label, String hint) {
@@ -350,10 +553,9 @@ class _CmsContentManagementScreenState
       enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(8),
           borderSide: const BorderSide(color: AppColors.border)),
-      focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(8),
-          borderSide:
-          const BorderSide(color: Color(0xFF0F3E38), width: 1.4)),
+      focusedBorder: const OutlineInputBorder(
+          borderRadius: BorderRadius.all(Radius.circular(8)),
+          borderSide: BorderSide(color: Color(0xFF0F3E38), width: 1.4)),
     );
   }
 
@@ -368,15 +570,10 @@ class _CmsContentManagementScreenState
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Header title[cite: 17]
               _buildHeaderSection(),
               const SizedBox(height: 16),
-
-              // 1. Top 5 Category Navigation Hub Cards[cite: 17]
               _buildCategoryHubCards(),
               const SizedBox(height: 16),
-
-              // 2. Middle Row: Home Banners Management & Live Mobile App Preview[cite: 17]
               LayoutBuilder(
                 builder: (context, constraints) {
                   final isWide = constraints.maxWidth >= 980;
@@ -384,11 +581,8 @@ class _CmsContentManagementScreenState
                     return Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // Left: Home Banners Table[cite: 17]
                         Expanded(flex: 7, child: _buildHomeBannersCard()),
                         const SizedBox(width: 14),
-
-                        // Right: Live App Preview Mockup[cite: 17]
                         SizedBox(
                           width: 320,
                           child: _buildLiveAppPreviewCard(),
@@ -406,8 +600,6 @@ class _CmsContentManagementScreenState
                 },
               ),
               const SizedBox(height: 16),
-
-              // 3. Bottom Row: App Content, FAQs, and Announcements[cite: 17]
               LayoutBuilder(
                 builder: (context, constraints) {
                   final isWide = constraints.maxWidth >= 980;
@@ -442,11 +634,10 @@ class _CmsContentManagementScreenState
     );
   }
 
-  // Header Title Row[cite: 17]
   Widget _buildHeaderSection() {
-    return Column(
+    return const Column(
       crossAxisAlignment: CrossAxisAlignment.start,
-      children: const [
+      children: [
         Text(
           'CMS / Content Management',
           style: TextStyle(
@@ -464,7 +655,6 @@ class _CmsContentManagementScreenState
     );
   }
 
-  // 1. Top 5 Category Navigation Cards[cite: 17]
   Widget _buildCategoryHubCards() {
     return Row(
       children: List.generate(_categoryTabs.length, (index) {
@@ -473,7 +663,8 @@ class _CmsContentManagementScreenState
 
         return Expanded(
           child: Container(
-            margin: EdgeInsets.only(right: index == _categoryTabs.length - 1 ? 0 : 8),
+            margin: EdgeInsets.only(
+                right: index == _categoryTabs.length - 1 ? 0 : 8),
             child: InkWell(
               onTap: () => setState(() => _selectedCategoryTab = index),
               borderRadius: BorderRadius.circular(12),
@@ -493,7 +684,9 @@ class _CmsContentManagementScreenState
                     Icon(
                       cat['icon'] as IconData,
                       size: 20,
-                      color: isSelected ? const Color(0xFF5EEAD4) : const Color(0xFF0F3E38),
+                      color: isSelected
+                          ? const Color(0xFF5EEAD4)
+                          : const Color(0xFF0F3E38),
                     ),
                     const SizedBox(height: 8),
                     Text(
@@ -513,7 +706,8 @@ class _CmsContentManagementScreenState
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
                         fontSize: 9.5,
-                        color: isSelected ? Colors.white70 : AppColors.textSecondary,
+                        color:
+                        isSelected ? Colors.white70 : AppColors.textSecondary,
                       ),
                     ),
                   ],
@@ -526,7 +720,6 @@ class _CmsContentManagementScreenState
     );
   }
 
-  // 2. Left: Home Banners Table[cite: 17]
   Widget _buildHomeBannersCard() {
     return Container(
       padding: const EdgeInsets.all(14),
@@ -543,44 +736,62 @@ class _CmsContentManagementScreenState
             children: [
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
-                children: const [
+                children: [
                   Text(
-                    'Home Banners (5)',
-                    style: TextStyle(
+                    'Home Banners (${_banners.length})',
+                    style: const TextStyle(
                         fontSize: 13.5,
                         fontWeight: FontWeight.w800,
                         color: AppColors.primary),
                   ),
-                  Text(
-                    'Manage the banner sliders shown on app home screen.',
-                    style:
-                    TextStyle(fontSize: 10, color: AppColors.textSecondary),
+                  const Text(
+                    'Click on any banner row to live preview on the app screen.',
+                    style: TextStyle(fontSize: 10, color: AppColors.textSecondary),
                   ),
                 ],
               ),
-              ElevatedButton.icon(
-                onPressed: () => _openAddEditBannerModal(),
-                icon: const Icon(Icons.add_rounded, size: 15, color: Colors.white),
-                label: const Text(
-                  '+ Add Banner',
-                  style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w700,
-                      color: Colors.white),
-                ),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF0F3E38),
-                  elevation: 0,
-                  padding:
-                  const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8)),
-                ),
+              Wrap(
+                spacing: 8,
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.refresh_rounded,
+                        color: AppColors.primary, size: 20),
+                    tooltip: 'Refresh Banners',
+                    onPressed: _fetchBanners,
+                  ),
+                  ElevatedButton.icon(
+                    onPressed: () => _openAddEditBannerModal(),
+                    icon: const Icon(Icons.add_rounded,
+                        size: 15, color: Colors.white),
+                    label: const Text(
+                      '+ Add Banner',
+                      style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                          color: Colors.white),
+                    ),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF0F3E38),
+                      elevation: 0,
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 8),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8)),
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
           const SizedBox(height: 12),
-          ClipRRect(
+          _isLoading
+              ? const Center(
+            child: Padding(
+              padding: EdgeInsets.all(28),
+              child: CircularProgressIndicator(color: AppColors.secondary),
+            ),
+          )
+              : ClipRRect(
             borderRadius: BorderRadius.circular(10),
             child: SingleChildScrollView(
               scrollDirection: Axis.horizontal,
@@ -603,16 +814,22 @@ class _CmsContentManagementScreenState
                 ],
                 rows: _banners.map((item) {
                   final isActive = item['status'] == 'Active';
+                  final isCurrentSelected =
+                      _selectedBanner?['_id'] == item['_id'];
 
                   return DataRow(
+                    selected: isCurrentSelected,
+                    onSelectChanged: (_) {
+                      setState(() => _selectedBanner = item);
+                    },
                     cells: [
                       DataCell(
                         Container(
                           width: 44,
                           height: 28,
                           decoration: BoxDecoration(
-                            color:
-                            (item['color'] as Color).withValues(alpha: 0.15),
+                            color: (item['color'] as Color)
+                                .withValues(alpha: 0.15),
                             borderRadius: BorderRadius.circular(6),
                             border: Border.all(
                                 color: (item['color'] as Color)
@@ -639,7 +856,8 @@ class _CmsContentManagementScreenState
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: const TextStyle(
-                                fontSize: 10.5, color: AppColors.textSecondary),
+                                fontSize: 10.5,
+                                color: AppColors.textSecondary),
                           ),
                         ),
                       ),
@@ -677,11 +895,23 @@ class _CmsContentManagementScreenState
                             const SizedBox(width: 4),
                             Column(
                               mainAxisAlignment: MainAxisAlignment.center,
-                              children: const [
-                                Icon(Icons.arrow_drop_up_rounded,
-                                    size: 16, color: AppColors.iconSecondary),
-                                Icon(Icons.arrow_drop_down_rounded,
-                                    size: 16, color: AppColors.iconSecondary),
+                              children: [
+                                InkWell(
+                                  onTap: () =>
+                                      _changeBannerOrder(item, -1),
+                                  child: const Icon(
+                                      Icons.arrow_drop_up_rounded,
+                                      size: 16,
+                                      color: AppColors.iconSecondary),
+                                ),
+                                InkWell(
+                                  onTap: () =>
+                                      _changeBannerOrder(item, 1),
+                                  child: const Icon(
+                                      Icons.arrow_drop_down_rounded,
+                                      size: 16,
+                                      color: AppColors.iconSecondary),
+                                ),
                               ],
                             ),
                           ],
@@ -702,13 +932,7 @@ class _CmsContentManagementScreenState
                               icon: const Icon(Icons.delete_outline_rounded,
                                   size: 15, color: Color(0xFFDC2626)),
                               tooltip: 'Delete Banner',
-                              onPressed: () {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(
-                                      content: Text(
-                                          'Deleted banner: ${item['title']}')),
-                                );
-                              },
+                              onPressed: () => _deleteBanner(item),
                             ),
                           ],
                         ),
@@ -730,8 +954,10 @@ class _CmsContentManagementScreenState
     color: AppColors.primary,
   );
 
-  // 2. Right: Live Mobile App Banner Preview[cite: 17]
   Widget _buildLiveAppPreviewCard() {
+    final preview = _selectedBanner ?? (_banners.isNotEmpty ? _banners.first : null);
+    final color = preview?['color'] as Color? ?? const Color(0xFF0F3E38);
+
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
@@ -742,9 +968,9 @@ class _CmsContentManagementScreenState
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
+          const Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: const [
+            children: [
               Text(
                 'Banner Preview (App View)',
                 style: TextStyle(
@@ -757,14 +983,12 @@ class _CmsContentManagementScreenState
             ],
           ),
           const SizedBox(height: 12),
-
-          // Simulated Phone Banner Card[cite: 17]
           Container(
             width: double.infinity,
             padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                colors: [Color(0xFF0F3E38), Color(0xFF134E4A)],
+              gradient: LinearGradient(
+                colors: [color, color.withValues(alpha: 0.85)],
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
               ),
@@ -783,29 +1007,32 @@ class _CmsContentManagementScreenState
                         color: Colors.white.withValues(alpha: 0.15),
                         borderRadius: BorderRadius.circular(4),
                       ),
-                      child: const Text('Special Scheme',
-                          style: TextStyle(
-                              fontSize: 9,
-                              fontWeight: FontWeight.w700,
-                              color: Color(0xFF5EEAD4))),
+                      child: Text(
+                        preview?['title'] ?? 'Special Scheme',
+                        style: const TextStyle(
+                            fontSize: 9,
+                            fontWeight: FontWeight.w700,
+                            color: Color(0xFF5EEAD4)),
+                      ),
                     ),
-                    const Icon(Icons.home_work_rounded,
+                    Icon(preview?['icon'] as IconData? ?? Icons.home_work_rounded,
                         color: Colors.white70, size: 20),
                   ],
                 ),
                 const SizedBox(height: 10),
-                const Text(
-                  'Build Your Dream\nHome Today',
-                  style: TextStyle(
-                      fontSize: 15,
+                Text(
+                  preview?['subtitle'] ?? 'Build Your Dream\nHome Today',
+                  style: const TextStyle(
+                      fontSize: 14.5,
                       fontWeight: FontWeight.w900,
                       color: Colors.white,
                       height: 1.2),
                 ),
                 const SizedBox(height: 4),
-                const Text(
-                  'Get low interest rates and flexible EMI options.',
-                  style: TextStyle(fontSize: 10, color: Colors.white70),
+                Text(
+                  preview?['desc'] ??
+                      'Get low interest rates and flexible EMI options.',
+                  style: const TextStyle(fontSize: 9.5, color: Colors.white70),
                 ),
                 const SizedBox(height: 12),
                 ElevatedButton(
@@ -819,18 +1046,18 @@ class _CmsContentManagementScreenState
                     shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(6)),
                   ),
-                  child: const Text('Apply Now',
-                      style: TextStyle(
-                          fontSize: 10,
-                          fontWeight: FontWeight.w800,
-                          color: Colors.white)),
+                  child: Text(
+                    preview?['btnText'] ?? 'Apply Now',
+                    style: const TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w800,
+                        color: Colors.white),
+                  ),
                 ),
               ],
             ),
           ),
           const SizedBox(height: 10),
-
-          // Dot indicator representation
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
@@ -859,7 +1086,6 @@ class _CmsContentManagementScreenState
     );
   }
 
-  // 3. Bottom Card 1: App Content[cite: 17]
   Widget _buildAppContentSummaryCard() {
     final items = [
       {'title': 'Why Choose Us', 'sub': 'Key benefits & features'},
@@ -876,7 +1102,6 @@ class _CmsContentManagementScreenState
     );
   }
 
-  // 3. Bottom Card 2: FAQs[cite: 17]
   Widget _buildFaqsSummaryCard() {
     final items = [
       {'title': 'How to apply for a loan?', 'sub': 'Step by step procedure'},
@@ -893,7 +1118,6 @@ class _CmsContentManagementScreenState
     );
   }
 
-  // 3. Bottom Card 3: Announcements[cite: 17]
   Widget _buildAnnouncementsSummaryCard() {
     final items = [
       {'title': 'Diwali Special Offer', 'sub': '10 Oct 2024 • Active'},
@@ -913,7 +1137,7 @@ class _CmsContentManagementScreenState
   Widget _buildSummaryCard({
     required String title,
     required String actionText,
-    required List<Map<String, String>> items,
+    required List items,
     required IconData icon,
   }) {
     return Container(

@@ -1,6 +1,11 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+
+import '../../../../constants/api_urls.dart';
 import '../../../../constants/app_colors.dart';
 import '../../../../constants/theme/app_text_styles.dart';
+import '../../../core/servicess/shared_pref_helper.dart';
 import '../loans/inquiry_status_screen.dart';
 
 enum NotificationType { inquiry, offer, system }
@@ -34,57 +39,146 @@ class NotificationsScreen extends StatefulWidget {
 
 class _NotificationsScreenState extends State<NotificationsScreen> {
   String _selectedFilter = 'All';
+  bool _isLoading = false;
+  List<NotificationItem> _notifications = [];
 
-  final List<NotificationItem> _notifications = [
-    NotificationItem(
-      id: '1',
-      title: 'Document Required for Personal Loan',
-      message:
-      'Please upload your latest 3 months salary slips for inquiry ID: MF202610200001.',
-      timeAgo: '10 mins ago',
-      type: NotificationType.inquiry,
-      isRead: false,
-      relatedInquiryId: 'MF202610200001',
-    ),
-    NotificationItem(
-      id: '2',
-      title: 'Loan Inquiry Under Review',
-      message:
-      'Our financial team has started reviewing your Home Loan inquiry (ID: MF202610150003).',
-      timeAgo: '2 hours ago',
-      type: NotificationType.inquiry,
-      isRead: false,
-      relatedInquiryId: 'MF202610150003',
-    ),
-    NotificationItem(
-      id: '3',
-      title: 'Special Pre-Approved Offer!',
-      message:
-      'Get an instant Business Loan of up to ₹10 Lakhs at special reduced rates of 9.99% p.a.',
-      timeAgo: '1 day ago',
-      type: NotificationType.offer,
-      isRead: true,
-    ),
-    NotificationItem(
-      id: '4',
-      title: 'Car Loan Approved!',
-      message:
-      'Congratulations! Your Car Loan inquiry MF202610100005 has been approved by our lending partner.',
-      timeAgo: '3 days ago',
-      type: NotificationType.inquiry,
-      isRead: true,
-      relatedInquiryId: 'MF202610100005',
-    ),
-    NotificationItem(
-      id: '5',
-      title: 'New Financial Blog Published',
-      message:
-      'Read our new guide on "How to Improve Your CIBIL Score Before Applying for a Loan".',
-      timeAgo: '5 days ago',
-      type: NotificationType.system,
-      isRead: true,
-    ),
-  ];
+  @override
+  void initState() {
+    super.initState();
+    _fetchLiveNotifications();
+  }
+
+  /// Live Loans aur Updates se notification feed build karna
+  Future<void> _fetchLiveNotifications() async {
+    setState(() => _isLoading = true);
+
+    try {
+      final token = await SharedPrefHelper.getToken();
+      if (token == null) {
+        _buildFallbackNotifications();
+        return;
+      }
+
+      final response = await http.get(
+        Uri.parse(MFUrls.myLoans),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+      ).timeout(const Duration(seconds: 10));
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        final List<dynamic> loans = data['data'] ?? [];
+
+        final List<NotificationItem> dynamicList = [];
+
+        // Har loan ke current status ke mutabiq dynamic notification generate karein
+        for (var loan in loans) {
+          final id = loan['_id']?.toString() ?? '';
+          final type = loan['loanType'] ?? 'Loan';
+          final status = loan['status'] ?? 'Pending';
+
+          if (status == 'Approved') {
+            dynamicList.add(
+              NotificationItem(
+                id: 'approved_$id',
+                title: '$type Approved!',
+                message: 'Great news! Your $type application has been approved by the lending institution.',
+                timeAgo: 'Recently',
+                type: NotificationType.inquiry,
+                isRead: false,
+                relatedInquiryId: id,
+              ),
+            );
+          } else if (status == 'Under Review') {
+            dynamicList.add(
+              NotificationItem(
+                id: 'review_$id',
+                title: '$type Under Review',
+                message: 'Our verification team is verifying your documents for application $id.',
+                timeAgo: 'In progress',
+                type: NotificationType.inquiry,
+                isRead: false,
+                relatedInquiryId: id,
+              ),
+            );
+          } else {
+            dynamicList.add(
+              NotificationItem(
+                id: 'pending_$id',
+                title: '$type Application Submitted',
+                message: 'Your $type inquiry has been received and is queued for verification.',
+                timeAgo: 'Awaiting review',
+                type: NotificationType.inquiry,
+                isRead: true,
+                relatedInquiryId: id,
+              ),
+            );
+          }
+        }
+
+        // Promotional aur System alerts shamil karein
+        dynamicList.add(
+          NotificationItem(
+            id: 'promo_1',
+            title: 'Special Pre-Approved Offer!',
+            message: 'Get an instant Business Loan of up to ₹10 Lakhs at special reduced rates of 9.99% p.a.',
+            timeAgo: '1 day ago',
+            type: NotificationType.offer,
+            isRead: true,
+          ),
+        );
+        dynamicList.add(
+          NotificationItem(
+            id: 'system_1',
+            title: 'New Financial Guide Published',
+            message: 'Read our new guide on "How to Improve Your CIBIL Score Before Applying for a Loan".',
+            timeAgo: '3 days ago',
+            type: NotificationType.system,
+            isRead: true,
+          ),
+        );
+
+        if (mounted) {
+          setState(() {
+            _notifications = dynamicList;
+          });
+        }
+      } else {
+        _buildFallbackNotifications();
+      }
+    } catch (_) {
+      _buildFallbackNotifications();
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
+  }
+
+  void _buildFallbackNotifications() {
+    setState(() {
+      _notifications = [
+        NotificationItem(
+          id: '1',
+          title: 'Special Pre-Approved Offer!',
+          message: 'Get an instant Business Loan of up to ₹10 Lakhs at special reduced rates.',
+          timeAgo: '1 day ago',
+          type: NotificationType.offer,
+          isRead: false,
+        ),
+        NotificationItem(
+          id: '2',
+          title: 'New Financial Blog Published',
+          message: 'Read our new guide on "How to Improve Your CIBIL Score Before Applying for a Loan".',
+          timeAgo: '3 days ago',
+          type: NotificationType.system,
+          isRead: true,
+        ),
+      ];
+    });
+  }
 
   List<NotificationItem> get _filteredNotifications {
     if (_selectedFilter == 'Unread') {
@@ -178,32 +272,48 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
             ),
             const Divider(height: 1, color: AppColors.divider),
 
-            // Notification List
+            // Notification List with Pull-To-Refresh
             Expanded(
-              child: _filteredNotifications.isEmpty
-                  ? Center(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
+              child: _isLoading
+                  ? const Center(
+                child: CircularProgressIndicator(color: AppColors.secondary),
+              )
+                  : RefreshIndicator(
+                color: AppColors.secondary,
+                onRefresh: _fetchLiveNotifications,
+                child: _filteredNotifications.isEmpty
+                    ? ListView(
                   children: [
-                    Icon(Icons.notifications_off_outlined,
-                        size: 48, color: AppColors.iconSecondary.withValues(alpha: 0.5)),
-                    const SizedBox(height: 12),
-                    const Text(
-                      'No notifications found',
-                      style: TextStyle(fontSize: 14, color: AppColors.textSecondary),
+                    const SizedBox(height: 120),
+                    Center(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.notifications_off_outlined,
+                            size: 48,
+                            color: AppColors.iconSecondary.withValues(alpha: 0.5),
+                          ),
+                          const SizedBox(height: 12),
+                          const Text(
+                            'No notifications found',
+                            style: TextStyle(fontSize: 14, color: AppColors.textSecondary),
+                          ),
+                        ],
+                      ),
                     ),
                   ],
+                )
+                    : ListView.separated(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  itemCount: _filteredNotifications.length,
+                  separatorBuilder: (_, __) => const SizedBox(height: 10),
+                  itemBuilder: (context, index) {
+                    final item = _filteredNotifications[index];
+                    return _buildNotificationCard(item);
+                  },
                 ),
-              )
-                  : ListView.separated(
-                physics: const BouncingScrollPhysics(),
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                itemCount: _filteredNotifications.length,
-                separatorBuilder: (_, __) => const SizedBox(height: 10),
-                itemBuilder: (context, index) {
-                  final item = _filteredNotifications[index];
-                  return _buildNotificationCard(item);
-                },
               ),
             ),
           ],

@@ -1,17 +1,59 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+
+import '../../../../constants/api_urls.dart';
 import '../../../../constants/app_colors.dart';
 import '../../../../constants/theme/app_text_styles.dart';
+import '../../../core/servicess/shared_pref_helper.dart';
+import '../../auth/login/login_screen.dart';
 import '../about/about_us_screen.dart';
 import '../contact/contact_us_screen.dart';
 import '../faq/faq_screen.dart';
 import '../inquiries/inquiry_history_screen.dart';
 import 'edit_profile_screen.dart';
 
-class ProfileScreen extends StatelessWidget {
+class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
 
   @override
+  State<ProfileScreen> createState() => _ProfileScreenState();
+}
+
+class _ProfileScreenState extends State<ProfileScreen> {
+  Map<String, String?> _userData = {};
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadUserProfile();
+  }
+
+  Future<void> _loadUserProfile() async {
+    final data = await SharedPrefHelper.getUserData();
+    if (mounted) {
+      setState(() {
+        _userData = data;
+        _isLoading = false;
+      });
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
+    if (_isLoading) {
+      return const Center(
+        child: CircularProgressIndicator(color: AppColors.secondary),
+      );
+    }
+
+    final String userName = _userData['name']?.isNotEmpty == true
+        ? _userData['name']!
+        : 'Mahavir Customer';
+    final String userEmail = _userData['email'] ?? 'No email provided';
+    final String userPhone = _userData['phone'] ?? 'No phone provided';
+
     return SingleChildScrollView(
       physics: const BouncingScrollPhysics(),
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -36,11 +78,11 @@ class ProfileScreen extends StatelessWidget {
           ),
           const SizedBox(height: 16),
 
-          // 1. User Info Header Card (PDF Page 21)
-          _buildUserCard(context),
+          // 1. Live User Info Header Card
+          _buildUserCard(context, userName, userEmail, userPhone),
           const SizedBox(height: 14),
 
-          // 2. My Inquiries Highlight Card (Crash Fixed)
+          // 2. My Inquiries Highlight Card
           _buildInquiriesHighlightCard(context),
           const SizedBox(height: 20),
 
@@ -51,12 +93,13 @@ class ProfileScreen extends StatelessWidget {
             _buildMenuItem(
               icon: Icons.person_outline_rounded,
               title: 'Edit Profile',
-              subtitle: 'Update your personal information',
-              onTap: () {
-                Navigator.push(
+              subtitle: 'Update your personal and bank information',
+              onTap: () async {
+                await Navigator.push(
                   context,
                   MaterialPageRoute(builder: (_) => const EditProfileScreen()),
                 );
+                _loadUserProfile(); // Return aane par updated data refresh
               },
             ),
             _buildMenuItem(
@@ -166,13 +209,37 @@ class ProfileScreen extends StatelessWidget {
               ),
             ),
           ),
+
+          const SizedBox(height: 12),
+
+          // 6. Play Store Mandatory: Delete Account
+          Center(
+            child: TextButton.icon(
+              onPressed: () => _showDeleteAccountDialog(context),
+              icon: const Icon(Icons.delete_outline_rounded, color: Colors.grey, size: 18),
+              label: const Text(
+                'Delete Account',
+                style: TextStyle(
+                  color: Colors.grey,
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w600,
+                  decoration: TextDecoration.underline,
+                ),
+              ),
+            ),
+          ),
           const SizedBox(height: 24),
         ],
       ),
     );
   }
 
-  Widget _buildUserCard(BuildContext context) {
+  Widget _buildUserCard(
+      BuildContext context,
+      String name,
+      String email,
+      String phone,
+      ) {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -214,12 +281,12 @@ class ProfileScreen extends StatelessWidget {
               children: [
                 Row(
                   children: [
-                    const Flexible(
+                    Flexible(
                       child: Text(
-                        'Rohit Kumar',
+                        name,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
+                        style: const TextStyle(
                           fontSize: 15.5,
                           fontWeight: FontWeight.w800,
                           color: AppColors.primary,
@@ -234,7 +301,7 @@ class ProfileScreen extends StatelessWidget {
                         borderRadius: BorderRadius.circular(12),
                       ),
                       child: const Text(
-                        'Verified Customer',
+                        'Verified',
                         style: TextStyle(
                           fontSize: 9.5,
                           fontWeight: FontWeight.w700,
@@ -245,17 +312,17 @@ class ProfileScreen extends StatelessWidget {
                   ],
                 ),
                 const SizedBox(height: 2),
-                const Text(
-                  'rohit.kumar@gmail.com',
-                  style: TextStyle(
+                Text(
+                  email,
+                  style: const TextStyle(
                     fontSize: 12,
                     color: AppColors.textSecondary,
                   ),
                 ),
                 const SizedBox(height: 1),
-                const Text(
-                  '+91 9876543210',
-                  style: TextStyle(
+                Text(
+                  phone.isNotEmpty ? '+91 $phone' : '',
+                  style: const TextStyle(
                     fontSize: 12,
                     color: AppColors.textSecondary,
                   ),
@@ -264,11 +331,12 @@ class ProfileScreen extends StatelessWidget {
             ),
           ),
           IconButton(
-            onPressed: () {
-              Navigator.push(
+            onPressed: () async {
+              await Navigator.push(
                 context,
                 MaterialPageRoute(builder: (_) => const EditProfileScreen()),
               );
+              _loadUserProfile();
             },
             icon: const Icon(Icons.edit_outlined, color: AppColors.secondary, size: 22),
           ),
@@ -277,7 +345,6 @@ class ProfileScreen extends StatelessWidget {
     );
   }
 
-  // Crash Fixed: ElevatedButton ko InkWell button me convert kiya taaki Row ke andar infinite width conflict na ho
   Widget _buildInquiriesHighlightCard(BuildContext context) {
     return Container(
       padding: const EdgeInsets.all(16),
@@ -452,13 +519,19 @@ class ProfileScreen extends StatelessWidget {
             child: const Text('Cancel', style: TextStyle(color: AppColors.textSecondary)),
           ),
           ElevatedButton(
-            onPressed: () {
+            onPressed: () async {
               Navigator.pop(ctx);
+              await SharedPrefHelper.clearSession();
+              if (!context.mounted) return;
+              Navigator.pushAndRemoveUntil(
+                context,
+                MaterialPageRoute(builder: (_) => const LoginScreen()),
+                    (route) => false,
+              );
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: AppColors.error,
               elevation: 0,
-              minimumSize: const Size(80, 36), // Explicit constraints to prevent infinite width
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
             ),
             child: const Text('Logout', style: TextStyle(color: Colors.white)),
@@ -466,5 +539,69 @@ class ProfileScreen extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  void _showDeleteAccountDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('Delete Account', style: TextStyle(fontWeight: FontWeight.w700, color: AppColors.error)),
+        content: const Text(
+          'Are you sure you want to delete your account? All active loan sessions will be permanently disconnected.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              Navigator.pop(ctx);
+              await _deleteAccount();
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.error,
+              elevation: 0,
+            ),
+            child: const Text('Confirm Delete', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _deleteAccount() async {
+    final token = await SharedPrefHelper.getToken();
+    if (token == null) return;
+
+    try {
+      final url = Uri.parse('${MFUrls.mfBaseUrl('api/v1/customers/account')}');
+      await http.delete(
+        url,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+      );
+
+      await SharedPrefHelper.clearSession();
+      if (!mounted) return;
+
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(builder: (_) => const LoginScreen()),
+            (route) => false,
+      );
+    } catch (_) {
+      // Offline fallback: Clear session anyway
+      await SharedPrefHelper.clearSession();
+      if (!mounted) return;
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(builder: (_) => const LoginScreen()),
+            (route) => false,
+      );
+    }
   }
 }

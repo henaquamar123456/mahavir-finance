@@ -30,7 +30,6 @@ class _ApplyLoanScreenState extends State<ApplyLoanScreen> {
     super.initState();
     final p = context.read<LoanInquiryProvider>();
 
-    // Initial controllers setup without calling notifyListeners
     _nameController = TextEditingController(text: p.fullName);
     _mobileController = TextEditingController(text: p.mobileNumber);
     _emailController = TextEditingController(text: p.email);
@@ -51,9 +50,25 @@ class _ApplyLoanScreenState extends State<ApplyLoanScreen> {
     super.dispose();
   }
 
+  void _syncControllersWithProvider(LoanInquiryProvider p) {
+    if (_nameController.text.isEmpty && p.fullName.isNotEmpty) {
+      _nameController.text = p.fullName;
+    }
+    if (_mobileController.text.isEmpty && p.mobileNumber.isNotEmpty) {
+      _mobileController.text = p.mobileNumber;
+    }
+    if (_emailController.text.isEmpty && p.email.isNotEmpty) {
+      _emailController.text = p.email;
+    }
+    if (_cityController.text.isEmpty && p.city.isNotEmpty) {
+      _cityController.text = p.city;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final provider = context.watch<LoanInquiryProvider>();
+    _syncControllersWithProvider(provider);
 
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
@@ -109,7 +124,7 @@ class _ApplyLoanScreenState extends State<ApplyLoanScreen> {
               ),
             ),
 
-            // Bottom Buttons Bar
+            // Bottom Action Bar
             _buildBottomActionBar(provider),
           ],
         ),
@@ -117,7 +132,7 @@ class _ApplyLoanScreenState extends State<ApplyLoanScreen> {
     );
   }
 
-  // 1. Stepper Header (Fixed syntax error)
+  // Stepper Header (Syntax Fixed: steps.length * 2 - 1)
   Widget _buildStepperHeader(int currentStep) {
     final steps = ['Loan Details', 'Personal Details', 'Review & Submit'];
 
@@ -239,11 +254,9 @@ class _ApplyLoanScreenState extends State<ApplyLoanScreen> {
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             Text('₹ 50,000',
-                style:
-                TextStyle(fontSize: 11, color: AppColors.textSecondary)),
+                style: TextStyle(fontSize: 11, color: AppColors.textSecondary)),
             Text('₹ 50,00,000',
-                style:
-                TextStyle(fontSize: 11, color: AppColors.textSecondary)),
+                style: TextStyle(fontSize: 11, color: AppColors.textSecondary)),
           ],
         ),
         const SizedBox(height: 16),
@@ -277,7 +290,7 @@ class _ApplyLoanScreenState extends State<ApplyLoanScreen> {
             children: [
               Icon(Icons.info_outline_rounded,
                   color: Color(0xFF2563EB), size: 18),
-              const SizedBox(width: 8),
+              SizedBox(width: 8),
               Expanded(
                 child: Text(
                   'This is a loan inquiry. Final loan amount, interest rate and tenure will be as per the lender\'s policy and verification.',
@@ -295,7 +308,7 @@ class _ApplyLoanScreenState extends State<ApplyLoanScreen> {
     );
   }
 
-  // STEP 2: Personal & Employment Details
+  // STEP 2: Personal Details
   Widget _buildStepTwo(LoanInquiryProvider provider) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -496,7 +509,7 @@ class _ApplyLoanScreenState extends State<ApplyLoanScreen> {
         children: [
           if (provider.currentStep > 0) ...[
             OutlinedButton(
-              onPressed: () => provider.previousStep(),
+              onPressed: provider.isLoading ? null : () => provider.previousStep(),
               style: OutlinedButton.styleFrom(
                 foregroundColor: AppColors.primary,
                 side: const BorderSide(color: AppColors.border),
@@ -513,19 +526,23 @@ class _ApplyLoanScreenState extends State<ApplyLoanScreen> {
             child: SizedBox(
               height: 48,
               child: ElevatedButton(
-                onPressed: () {
+                onPressed: provider.isLoading
+                    ? null
+                    : () async {
                   if (provider.currentStep == 1) {
                     provider.updatePersonalDetails(
-                      name: _nameController.text,
-                      mobile: _mobileController.text,
-                      email: _emailController.text,
+                      name: _nameController.text.trim(),
+                      mobile: _mobileController.text.trim(),
+                      email: _emailController.text.trim(),
                       dob: provider.dob,
                     );
                     provider.updateEmploymentDetails(
                       empType: provider.employmentType,
-                      income: double.tryParse(_incomeController.text) ?? 50000,
-                      company: _companyController.text,
-                      city: _cityController.text,
+                      income:
+                      double.tryParse(_incomeController.text.trim()) ??
+                          50000,
+                      company: _companyController.text.trim(),
+                      city: _cityController.text.trim(),
                     );
                   }
 
@@ -535,30 +552,63 @@ class _ApplyLoanScreenState extends State<ApplyLoanScreen> {
                     if (!provider.agreedToTerms) {
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(
-                            content:
-                            Text('Please accept terms and conditions')),
+                            content: Text(
+                                'Please accept terms and conditions')),
                       );
                       return;
                     }
-                    provider.submitInquiry();
-                    Navigator.pushReplacement(
-                      context,
-                      MaterialPageRoute(
-                          builder: (_) => const InquirySuccessScreen()),
-                    );
+
+                    // Real Backend API Call Trigger
+                    final success = await provider.submitInquiry();
+
+                    if (!context.mounted) return;
+
+                    if (success) {
+                      Navigator.pushReplacement(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => ChangeNotifierProvider.value(
+                            value: provider,
+                            child: const InquirySuccessScreen(),
+                          ),
+                        ),
+                      );
+                    } else {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(
+                            provider.errorMessage ??
+                                'Failed to apply for loan. Try again.',
+                          ),
+                          backgroundColor: AppColors.error,
+                        ),
+                      );
+                    }
                   }
                 },
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.secondary,
+                  disabledBackgroundColor: AppColors.secondary.withValues(alpha: 0.6),
                   elevation: 0,
                   shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12)),
                 ),
-                child: Row(
+                child: provider.isLoading
+                    ? const SizedBox(
+                  height: 22,
+                  width: 22,
+                  child: CircularProgressIndicator(
+                    color: Colors.white,
+                    strokeWidth: 2,
+                  ),
+                )
+                    : Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     Text(
-                      provider.currentStep == 2 ? 'Submit Inquiry' : 'Next',
+                      provider.currentStep == 2
+                          ? 'Submit Inquiry'
+                          : 'Next',
                       style: const TextStyle(
                         fontSize: 15,
                         fontWeight: FontWeight.w600,
@@ -684,7 +734,7 @@ class _ApplyLoanScreenState extends State<ApplyLoanScreen> {
   Widget _buildReviewCard({
     required String title,
     required VoidCallback onEdit,
-    required List<Map<String, String>> items,
+    required List items,
   }) {
     return Container(
       padding: const EdgeInsets.all(14),
@@ -732,7 +782,7 @@ class _ApplyLoanScreenState extends State<ApplyLoanScreen> {
                   Text(it['val']!,
                       style: const TextStyle(
                           fontSize: 12.5,
-                          fontWeight: FontWeight.w600,
+                          fontWeight: FontWeight.w700,
                           color: AppColors.primary)),
                 ],
               ),

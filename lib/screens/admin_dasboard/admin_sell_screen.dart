@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
-import 'package:mahavir_finance/screens/admin_dasboard/settings/role_permission_screen.dart';
 
 import '../../../../constants/app_colors.dart';
 import '../../../../constants/asset_constants.dart';
-import 'admin_dasboard_screen.dart';
+import '../../../../core/servicess/shared_pref_helper.dart';
 
+import '../auth/login/login_screen.dart';
+import 'admin_dasboard_screen.dart';
 import 'blogs/blogs_management_screen.dart';
 import 'contant/content_management_screen.dart';
 import 'customer/customer_management_screen.dart';
@@ -16,6 +17,7 @@ import 'notifications/notifications_management_screen.dart';
 import 'patners/patner_manegment_screen.dart';
 import 'products/loan_products_screen.dart';
 import 'reports/reports_analytics_screen.dart';
+import 'settings/role_permission_screen.dart';
 import 'support/support_queries_screen.dart';
 
 class AdminShellScreen extends StatefulWidget {
@@ -28,8 +30,9 @@ class AdminShellScreen extends StatefulWidget {
 class _AdminShellScreenState extends State<AdminShellScreen> {
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   int _selectedIndex = 0;
+  String _adminName = 'Super Admin';
+  String _adminEmail = 'admin@mahavirfinance.com';
 
-  // Sidebar ke 14 menu items (0 se 13) ka kram
   final List<Widget> _pages = const [
     AdminDashboardScreen(),          // 0: Dashboard
     CustomerManagementScreen(),      // 1: Customers
@@ -48,10 +51,65 @@ class _AdminShellScreenState extends State<AdminShellScreen> {
   ];
 
   @override
+  void initState() {
+    super.initState();
+    _loadAdminInfo();
+  }
+
+  Future<void> _loadAdminInfo() async {
+    final user = await SharedPrefHelper.getUserData();
+    if (user.isNotEmpty && mounted) {
+      setState(() {
+        _adminName = user['name'] ?? 'Super Admin';
+        _adminEmail = user['email'] ?? 'admin@mahavirfinance.com';
+      });
+    }
+  }
+
+  Future<void> _handleLogout() async {
+    final shouldLogout = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        title: const Text(
+          'Confirm Logout',
+          style: TextStyle(fontWeight: FontWeight.w800, color: AppColors.primary),
+        ),
+        content: const Text(
+          'Are you sure you want to log out from the Admin Console?',
+          style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel', style: TextStyle(color: AppColors.textSecondary)),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFDC2626),
+              elevation: 0,
+            ),
+            child: const Text('Logout', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
+          ),
+        ],
+      ),
+    );
+
+    if (shouldLogout == true && mounted) {
+      await SharedPrefHelper.clearSession();
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(builder: (_) => const LoginScreen()),
+            (route) => false,
+      );
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     final isDesktop = MediaQuery.of(context).size.width >= 1024;
 
-    // Admin pages ke liye button constraints ko reset kiya gaya hai
     final adminTheme = Theme.of(context).copyWith(
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
@@ -190,24 +248,38 @@ class _AdminShellScreenState extends State<AdminShellScreen> {
             ),
             child: Row(
               children: [
-                const CircleAvatar(
+                CircleAvatar(
                   radius: 17,
-                  backgroundColor: Color(0xFF0F3E38),
-                  child: Text('A', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
+                  backgroundColor: const Color(0xFF0F3E38),
+                  child: Text(
+                    _adminName.isNotEmpty ? _adminName[0].toUpperCase() : 'A',
+                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
+                  ),
                 ),
                 const SizedBox(width: 10),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
-                    children: const [
-                      Text('Admin User', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: AppColors.primary)),
-                      Text('Super Admin', style: TextStyle(fontSize: 10, color: AppColors.textSecondary)),
+                    children: [
+                      Text(
+                        _adminName,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: AppColors.primary),
+                      ),
+                      Text(
+                        _adminEmail,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontSize: 10, color: AppColors.textSecondary),
+                      ),
                     ],
                   ),
                 ),
                 IconButton(
                   icon: const Icon(Icons.logout_rounded, size: 18, color: Color(0xFFDC2626)),
-                  onPressed: () => Navigator.pop(context),
+                  tooltip: 'Logout',
+                  onPressed: _handleLogout,
                 ),
               ],
             ),
