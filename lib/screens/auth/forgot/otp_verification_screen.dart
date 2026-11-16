@@ -1,5 +1,9 @@
 import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+
+import '../../../constants/api_urls.dart';
 import '../../../constants/app_colors.dart';
 import '../../../constants/asset_constants.dart';
 import '../../../constants/theme/app_text_styles.dart';
@@ -25,6 +29,8 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
   int _secondsRemaining = 30;
   Timer? _timer;
   bool _canResend = false;
+  bool _isLoading = false;
+  bool _isResending = false;
 
   @override
   void initState() {
@@ -39,12 +45,15 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
     });
     _timer?.cancel();
     _timer = Timer.periodic(const Duration(seconds: 1), (t) {
+      if (!mounted) {
+        t.cancel();
+        return;
+      }
       if (_secondsRemaining > 0) {
         setState(() => _secondsRemaining--);
       } else {
-        _canResend = true;
-        _timer?.cancel();
-        setState(() {});
+        setState(() => _canResend = true);
+        t.cancel();
       }
     });
   }
@@ -61,9 +70,14 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
     super.dispose();
   }
 
-  String get _otp => _controllers.map((c) => c.text).join();
+  String get _otp => _controllers.map((c) => c.text.trim()).join();
 
-  void _verifyOtp() {
+  // ==========================================
+  // 1. VERIFY OTP (Live POST API)
+  // ==========================================
+  Future<void> _verifyOtp() async {
+    FocusScope.of(context).unfocus();
+
     if (_otp.length < 6) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -74,10 +88,136 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
       return;
     }
 
-    Navigator.pushReplacement(
-      context,
-      MaterialPageRoute(builder: (_) => const ResetPasswordScreen()),
-    );
+    if (_isLoading) return;
+    setState(() => _isLoading = true);
+
+    try {
+      final url = Uri.parse(MFUrls.verifyOtp);
+      final response = await http
+          .post(
+        url,
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        },
+        body: jsonEncode({
+          'identifier': widget.destination.trim(),
+          'otp': _otp,
+        }),
+      )
+          .timeout(const Duration(seconds: 15));
+
+      final Map<String, dynamic> body = jsonDecode(response.body);
+
+      if (!mounted) return;
+
+      if (response.statusCode == 200 && body['success'] == true) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(body['message'] ?? 'OTP verified successfully!'),
+            backgroundColor: AppColors.secondary,
+          ),
+        );
+
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (_) => ResetPasswordScreen(
+              destination: widget.destination.trim(),
+              otp: _otp,
+            ),
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              body['message'] ?? 'Invalid or expired OTP. Please try again.',
+            ),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Connection error: ${e.toString()}'),
+          backgroundColor: AppColors.error,
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
+  }
+
+  // ==========================================
+  // 2. RESEND OTP (Live POST API)
+  // ==========================================
+  Future<void> _resendOtp() async {
+    if (_isResending) return;
+    setState(() => _isResending = true);
+
+    try {
+      final url = Uri.parse(MFUrls.forgotPassword);
+      final response = await http
+          .post(
+        url,
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        },
+        body: jsonEncode({
+          'identifier': widget.destination.trim(),
+        }),
+      )
+          .timeout(const Duration(seconds: 15));
+
+      final Map<String, dynamic> body = jsonDecode(response.body);
+
+      if (!mounted) return;
+
+      if ((response.statusCode == 200 || response.statusCode == 201) &&
+          body['success'] == true) {
+        for (var c in _controllers) {
+          c.clear();
+        }
+        _focusNodes[0].requestFocus();
+        _startTimer();
+
+        final String otpHint =
+        body['otp'] != null ? ' (New OTP: ${body['otp']})' : '';
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('New OTP sent successfully$otpHint'),
+            backgroundColor: AppColors.secondary,
+            duration: const Duration(seconds: 6),
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(body['message'] ?? 'Failed to resend OTP'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Unable to resend OTP: ${e.toString()}'),
+          backgroundColor: AppColors.error,
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isResending = false);
+      }
+    }
   }
 
   @override
@@ -176,12 +316,19 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
                         focusedBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(10),
                           borderSide: const BorderSide(
-                              color: AppColors.secondary, width: 2),
+                            color: AppColors.secondary,
+                            width: 2,
+                          ),
                         ),
                       ),
                       onChanged: (val) {
-                        if (val.isNotEmpty && index < 5) {
-                          _focusNodes[index + 1].requestFocus();
+                        if (val.isNotEmpty) {
+                          if (index < 5) {
+                            _focusNodes[index + 1].requestFocus();
+                          } else {
+                            // 6th digit enter hote hi automatic verify call hoga
+                            _verifyOtp();
+                          }
                         } else if (val.isEmpty && index > 0) {
                           _focusNodes[index - 1].requestFocus();
                         }
@@ -196,15 +343,26 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
               SizedBox(
                 height: 50,
                 child: ElevatedButton(
-                  onPressed: _verifyOtp,
+                  onPressed: _isLoading ? null : _verifyOtp,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.secondary,
+                    disabledBackgroundColor:
+                    AppColors.secondary.withValues(alpha: 0.6),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12),
                     ),
                     elevation: 0,
                   ),
-                  child: const Row(
+                  child: _isLoading
+                      ? const SizedBox(
+                    height: 22,
+                    width: 22,
+                    child: CircularProgressIndicator(
+                      color: Colors.white,
+                      strokeWidth: 2.5,
+                    ),
+                  )
+                      : const Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       Text(
@@ -216,8 +374,11 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
                         ),
                       ),
                       SizedBox(width: 8),
-                      Icon(Icons.arrow_forward_rounded,
-                          color: Colors.white, size: 18),
+                      Icon(
+                        Icons.arrow_forward_rounded,
+                        color: Colors.white,
+                        size: 18,
+                      ),
                     ],
                   ),
                 ),
@@ -231,11 +392,22 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
                   const Text(
                     "Didn't receive the code? ",
                     style: TextStyle(
-                        fontSize: 13, color: AppColors.textSecondary),
+                      fontSize: 13,
+                      color: AppColors.textSecondary,
+                    ),
                   ),
-                  if (_canResend)
+                  if (_isResending)
+                    const SizedBox(
+                      height: 14,
+                      width: 14,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: AppColors.secondary,
+                      ),
+                    )
+                  else if (_canResend)
                     InkWell(
-                      onTap: _startTimer,
+                      onTap: _resendOtp,
                       child: const Text(
                         'Resend OTP',
                         style: TextStyle(

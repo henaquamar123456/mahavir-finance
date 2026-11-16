@@ -18,12 +18,14 @@ class AuthFormProvider extends ChangeNotifier {
   bool _isLoading = false;
 
   String? _errorMessage;
+  String? _receivedOtp;
 
   String get selectedRole => _selectedRole;
   bool get isMobileLogin => _isMobileLogin;
   bool get isPasswordVisible => _isPasswordVisible;
   bool get isLoading => _isLoading;
   String? get errorMessage => _errorMessage;
+  String? get receivedOtp => _receivedOtp;
 
   void setSelectedRole(String role) {
     if (_selectedRole == role) return;
@@ -87,7 +89,7 @@ class AuthFormProvider extends ChangeNotifier {
     return null;
   }
 
-  /// Real API Integration for Forgot Password / OTP Trigger
+  /// 1. Request OTP for Forgot Password
   Future<bool> forgotPassword() async {
     if (_isLoading) return false;
 
@@ -97,6 +99,7 @@ class AuthFormProvider extends ChangeNotifier {
 
     _isLoading = true;
     _errorMessage = null;
+    _receivedOtp = null;
     notifyListeners();
 
     try {
@@ -125,6 +128,7 @@ class AuthFormProvider extends ChangeNotifier {
 
       if ((response.statusCode == 200 || response.statusCode == 201) &&
           responseData['success'] == true) {
+        _receivedOtp = responseData['otp']?.toString();
         return true;
       } else {
         _errorMessage = responseData['message'] ??
@@ -136,6 +140,99 @@ class AuthFormProvider extends ChangeNotifier {
       return false;
     } catch (e) {
       _errorMessage = 'Server error or request timed out: ${e.toString()}';
+      return false;
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+
+  /// 2. Verify OTP
+  Future<bool> verifyOtp({
+    required String destination,
+    required String otp,
+  }) async {
+    if (_isLoading) return false;
+
+    _isLoading = true;
+    _errorMessage = null;
+    notifyListeners();
+
+    try {
+      final url = Uri.parse(MFUrls.verifyOtp);
+      final response = await http
+          .post(
+        url,
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        },
+        body: jsonEncode({
+          'identifier': destination.trim(),
+          'otp': otp.trim(),
+        }),
+      )
+          .timeout(const Duration(seconds: 15));
+
+      final Map<String, dynamic> responseData = jsonDecode(response.body);
+
+      if (response.statusCode == 200 && responseData['success'] == true) {
+        return true;
+      } else {
+        _errorMessage =
+            responseData['message'] ?? 'Invalid or expired OTP code.';
+        return false;
+      }
+    } catch (e) {
+      _errorMessage = 'Failed to verify OTP: ${e.toString()}';
+      return false;
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+
+  /// 3. Reset Password with Verified OTP
+  Future<bool> resetPassword({
+    String? destination,
+    String? otp,
+    required String newPassword,
+  }) async {
+    if (_isLoading) return false;
+
+    _isLoading = true;
+    _errorMessage = null;
+    notifyListeners();
+
+    try {
+      final url = Uri.parse(MFUrls.resetPasswordDirect);
+      final response = await http
+          .post(
+        url,
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        },
+        body: jsonEncode({
+          if (destination != null && destination.isNotEmpty)
+            'identifier': destination.trim(),
+          if (otp != null && otp.isNotEmpty) 'otp': otp.trim(),
+          'password': newPassword.trim(),
+        }),
+      )
+          .timeout(const Duration(seconds: 15));
+
+      final Map<String, dynamic> responseData = jsonDecode(response.body);
+
+      if (response.statusCode == 200 && responseData['success'] == true) {
+        return true;
+      } else {
+        _errorMessage =
+            responseData['message'] ?? 'Unable to reset password.';
+        return false;
+      }
+    } catch (e) {
+      _errorMessage = 'Connection error: ${e.toString()}';
       return false;
     } finally {
       _isLoading = false;

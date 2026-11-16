@@ -40,34 +40,23 @@ class _ForgotPasswordView extends StatelessWidget {
       ),
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(13),
-        borderSide: const BorderSide(
-          color: AppColors.border,
-        ),
+        borderSide: const BorderSide(color: AppColors.border),
       ),
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(13),
-        borderSide: const BorderSide(
-          color: AppColors.border,
-        ),
+        borderSide: const BorderSide(color: AppColors.border),
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(13),
-        borderSide: const BorderSide(
-          color: AppColors.primary,
-          width: 1.4,
-        ),
+        borderSide: const BorderSide(color: AppColors.primary, width: 1.4),
       ),
       errorBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(13),
-        borderSide: const BorderSide(
-          color: AppColors.error,
-        ),
+        borderSide: const BorderSide(color: AppColors.error),
       ),
       focusedErrorBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(13),
-        borderSide: const BorderSide(
-          color: AppColors.error,
-        ),
+        borderSide: const BorderSide(color: AppColors.error),
       ),
     );
   }
@@ -98,10 +87,15 @@ class _ForgotPasswordView extends StatelessWidget {
         ? '+91 ${provider.mobileController.text.trim()}'
         : provider.emailController.text.trim();
 
+    final String otpHint = provider.receivedOtp != null
+        ? ' (OTP: ${provider.receivedOtp})'
+        : '';
+
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('OTP sent successfully. Please verify.'),
+      SnackBar(
+        content: Text('OTP sent successfully$otpHint. Please verify.'),
         backgroundColor: AppColors.secondary,
+        duration: const Duration(seconds: 6),
       ),
     );
 
@@ -150,15 +144,11 @@ class _ForgotPasswordView extends StatelessWidget {
                             ),
                           ),
                         ),
-
                         const SizedBox(height: 2),
-
                         const Center(
                           child: _ForgotPasswordIllustration(),
                         ),
-
                         const SizedBox(height: 16),
-
                         Text(
                           'Forgot Password?',
                           textAlign: TextAlign.center,
@@ -169,9 +159,7 @@ class _ForgotPasswordView extends StatelessWidget {
                             letterSpacing: -0.7,
                           ),
                         ),
-
                         const SizedBox(height: 6),
-
                         Text(
                           "Enter your registered mobile number or\n"
                               "email address and we'll send you an OTP\n"
@@ -183,18 +171,13 @@ class _ForgotPasswordView extends StatelessWidget {
                             height: 1.45,
                           ),
                         ),
-
                         const SizedBox(height: 22),
-
-                        // Mobile / Email selector
                         Container(
                           padding: const EdgeInsets.all(5),
                           decoration: BoxDecoration(
                             color: AppColors.surface,
                             borderRadius: BorderRadius.circular(13),
-                            border: Border.all(
-                              color: AppColors.border,
-                            ),
+                            border: Border.all(color: AppColors.border),
                           ),
                           child: Row(
                             children: [
@@ -202,8 +185,7 @@ class _ForgotPasswordView extends StatelessWidget {
                                 child: _MethodTab(
                                   title: 'Mobile Number',
                                   selected: provider.isMobileLogin,
-                                  onTap: () =>
-                                      provider.changeLoginMethod(true),
+                                  onTap: () => provider.changeLoginMethod(true),
                                 ),
                               ),
                               Expanded(
@@ -217,9 +199,7 @@ class _ForgotPasswordView extends StatelessWidget {
                             ],
                           ),
                         ),
-
                         const SizedBox(height: 15),
-
                         if (provider.isMobileLogin)
                           TextFormField(
                             controller: provider.mobileController,
@@ -293,9 +273,7 @@ class _ForgotPasswordView extends StatelessWidget {
                               ),
                             ),
                           ),
-
                         const SizedBox(height: 20),
-
                         SizedBox(
                           height: 54,
                           child: DecoratedBox(
@@ -311,10 +289,8 @@ class _ForgotPasswordView extends StatelessWidget {
                             child: ElevatedButton(
                               onPressed: provider.isLoading
                                   ? null
-                                  : () => _handleForgotPassword(
-                                context,
-                                provider,
-                              ),
+                                  : () =>
+                                  _handleForgotPassword(context, provider),
                               style: ElevatedButton.styleFrom(
                                 backgroundColor: Colors.transparent,
                                 disabledBackgroundColor: Colors.transparent,
@@ -356,9 +332,7 @@ class _ForgotPasswordView extends StatelessWidget {
                             ),
                           ),
                         ),
-
                         const SizedBox(height: 32),
-
                         Container(
                           padding: const EdgeInsets.symmetric(
                             horizontal: 17,
@@ -367,14 +341,10 @@ class _ForgotPasswordView extends StatelessWidget {
                           decoration: BoxDecoration(
                             color: AppColors.surface,
                             borderRadius: BorderRadius.circular(18),
-                            border: Border.all(
-                              color: AppColors.border,
-                            ),
+                            border: Border.all(color: AppColors.border),
                             boxShadow: [
                               BoxShadow(
-                                color: AppColors.shadow.withValues(
-                                  alpha: 0.04,
-                                ),
+                                color: AppColors.shadow.withValues(alpha: 0.04),
                                 blurRadius: 12,
                                 offset: const Offset(0, 4),
                               ),
@@ -398,8 +368,7 @@ class _ForgotPasswordView extends StatelessWidget {
                               const SizedBox(width: 13),
                               Expanded(
                                 child: Column(
-                                  crossAxisAlignment:
-                                  CrossAxisAlignment.start,
+                                  crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     Text(
                                       'Your information is secure with us',
@@ -424,7 +393,6 @@ class _ForgotPasswordView extends StatelessWidget {
                             ],
                           ),
                         ),
-
                         const SizedBox(height: 12),
                       ],
                     ),

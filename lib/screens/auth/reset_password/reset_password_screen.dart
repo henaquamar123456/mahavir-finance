@@ -1,15 +1,24 @@
-
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+
+import '../../../constants/api_urls.dart';
 import '../../../constants/app_colors.dart';
 import '../../../constants/asset_constants.dart';
 import '../../../constants/theme/app_text_styles.dart';
 
 class ResetPasswordScreen extends StatefulWidget {
-  const ResetPasswordScreen({super.key});
+  final String? destination;
+  final String? otp;
+
+  const ResetPasswordScreen({
+    super.key,
+    this.destination,
+    this.otp,
+  });
 
   @override
-  State<ResetPasswordScreen> createState() =>
-      _ResetPasswordScreenState();
+  State<ResetPasswordScreen> createState() => _ResetPasswordScreenState();
 }
 
 class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
@@ -22,15 +31,13 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
   bool _confirmPasswordVisible = false;
   bool _isLoading = false;
 
-  bool get _hasMinLength =>
-      _passwordController.text.length >= 8;
+  bool get _hasMinLength => _passwordController.text.length >= 8;
 
   bool get _hasUpperAndLower =>
       RegExp(r'[A-Z]').hasMatch(_passwordController.text) &&
           RegExp(r'[a-z]').hasMatch(_passwordController.text);
 
-  bool get _hasNumber =>
-      RegExp(r'[0-9]').hasMatch(_passwordController.text);
+  bool get _hasNumber => RegExp(r'[0-9]').hasMatch(_passwordController.text);
 
   bool get _hasSpecialCharacter =>
       RegExp(r'[!@#$%^&*(),.?":{}|<>_\-+=/\\\[\];]')
@@ -75,9 +82,7 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
       suffixIcon: IconButton(
         onPressed: onVisibilityTap,
         icon: Icon(
-          visible
-              ? Icons.visibility_outlined
-              : Icons.visibility_off_outlined,
+          visible ? Icons.visibility_outlined : Icons.visibility_off_outlined,
           color: AppColors.primary,
           size: 19,
         ),
@@ -91,34 +96,23 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
       ),
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(11),
-        borderSide: const BorderSide(
-          color: AppColors.border,
-        ),
+        borderSide: const BorderSide(color: AppColors.border),
       ),
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(11),
-        borderSide: const BorderSide(
-          color: AppColors.border,
-        ),
+        borderSide: const BorderSide(color: AppColors.border),
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(11),
-        borderSide: const BorderSide(
-          color: AppColors.primary,
-          width: 1.3,
-        ),
+        borderSide: const BorderSide(color: AppColors.primary, width: 1.3),
       ),
       errorBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(11),
-        borderSide: const BorderSide(
-          color: AppColors.error,
-        ),
+        borderSide: const BorderSide(color: AppColors.error),
       ),
       focusedErrorBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(11),
-        borderSide: const BorderSide(
-          color: AppColors.error,
-        ),
+        borderSide: const BorderSide(color: AppColors.error),
       ),
     );
   }
@@ -133,21 +127,56 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
     setState(() => _isLoading = true);
 
     try {
-      // TODO: Connect your reset-password API here.
-      // Send the reset token / OTP and the new password
-      // according to your backend API requirements.
+      final url = Uri.parse(MFUrls.resetPasswordDirect);
+      final response = await http
+          .post(
+        url,
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        },
+        body: jsonEncode({
+          if (widget.destination != null && widget.destination!.isNotEmpty)
+            'identifier': widget.destination!.trim(),
+          if (widget.otp != null && widget.otp!.isNotEmpty)
+            'otp': widget.otp!.trim(),
+          'password': _passwordController.text.trim(),
+        }),
+      )
+          .timeout(const Duration(seconds: 15));
 
-      await Future<void>.delayed(
-        const Duration(milliseconds: 300),
-      );
+      final Map<String, dynamic> body = jsonDecode(response.body);
 
       if (!mounted) return;
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Form validated. Connect your reset-password API.',
+      if (response.statusCode == 200 && body['success'] == true) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              body['message'] ?? 'Password reset successfully! Please login.',
+            ),
+            backgroundColor: AppColors.secondary,
           ),
+        );
+
+        // Login screen par wapas bhejein
+        Navigator.of(context).popUntil((route) => route.isFirst);
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              body['message'] ?? 'Unable to reset password. Please try again.',
+            ),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Connection error: ${e.toString()}'),
+          backgroundColor: AppColors.error,
         ),
       );
     } finally {
@@ -169,9 +198,7 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
           Icon(
             satisfied ? Icons.check_circle : Icons.circle,
             size: satisfied ? 11 : 5,
-            color: satisfied
-                ? AppColors.secondary
-                : AppColors.textSecondary,
+            color: satisfied ? AppColors.secondary : AppColors.textSecondary,
           ),
           const SizedBox(width: 7),
           Expanded(
@@ -209,26 +236,17 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
                       bottom: 0,
                       child: _BottomWaves(),
                     ),
-
                     Padding(
-                      padding: const EdgeInsets.fromLTRB(
-                        20,
-                        5,
-                        20,
-                        48,
-                      ),
+                      padding: const EdgeInsets.fromLTRB(20, 5, 20, 48),
                       child: Form(
                         key: _formKey,
                         child: Column(
-                          crossAxisAlignment:
-                          CrossAxisAlignment.stretch,
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
-                            // Back arrow
                             Align(
                               alignment: Alignment.centerLeft,
                               child: IconButton(
-                                onPressed: () =>
-                                    Navigator.maybePop(context),
+                                onPressed: () => Navigator.maybePop(context),
                                 padding: EdgeInsets.zero,
                                 constraints: const BoxConstraints(
                                   minWidth: 40,
@@ -241,10 +259,7 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
                                 ),
                               ),
                             ),
-
                             const SizedBox(height: 2),
-
-                            // Mahavir Finance logo
                             Center(
                               child: Image.asset(
                                 AssetsConstants.mahavirLogo,
@@ -253,10 +268,7 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
                                 fit: BoxFit.contain,
                               ),
                             ),
-
                             const SizedBox(height: 10),
-
-                            // Screen title
                             Text(
                               'Reset Password',
                               textAlign: TextAlign.center,
@@ -267,10 +279,7 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
                                 letterSpacing: -0.5,
                               ),
                             ),
-
                             const SizedBox(height: 5),
-
-                            // Description
                             Text(
                               'Enter your new password below to\n'
                                   'reset your account password.',
@@ -281,17 +290,11 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
                                 height: 1.35,
                               ),
                             ),
-
                             const SizedBox(height: 9),
-
-                            // Lock illustration
                             const Center(
                               child: _ResetPasswordIllustration(),
                             ),
-
                             const SizedBox(height: 9),
-
-                            // New password
                             TextFormField(
                               controller: _passwordController,
                               obscureText: !_passwordVisible,
@@ -326,16 +329,12 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
                                 visible: _passwordVisible,
                                 onVisibilityTap: () {
                                   setState(() {
-                                    _passwordVisible =
-                                    !_passwordVisible;
+                                    _passwordVisible = !_passwordVisible;
                                   });
                                 },
                               ),
                             ),
-
                             const SizedBox(height: 7),
-
-                            // Confirm password
                             TextFormField(
                               controller: _confirmPasswordController,
                               obscureText: !_confirmPasswordVisible,
@@ -362,27 +361,17 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
                                 },
                               ),
                             ),
-
                             const SizedBox(height: 11),
-
-                            // Password requirements card
                             Container(
-                              padding: const EdgeInsets.fromLTRB(
-                                13,
-                                11,
-                                12,
-                                8,
-                              ),
+                              padding:
+                              const EdgeInsets.fromLTRB(13, 11, 12, 8),
                               decoration: BoxDecoration(
                                 color: const Color(0xFFEEF4FF),
                                 borderRadius: BorderRadius.circular(12),
-                                border: Border.all(
-                                  color: AppColors.border,
-                                ),
+                                border: Border.all(color: AppColors.border),
                               ),
                               child: Column(
-                                crossAxisAlignment:
-                                CrossAxisAlignment.start,
+                                crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Row(
                                     children: [
@@ -394,8 +383,8 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
                                       const SizedBox(width: 9),
                                       Text(
                                         'Password Requirements:',
-                                        style: AppTextStyles.labelLarge
-                                            .copyWith(
+                                        style:
+                                        AppTextStyles.labelLarge.copyWith(
                                           color: AppColors.primary,
                                           fontSize: 11,
                                           fontWeight: FontWeight.bold,
@@ -405,9 +394,7 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
                                   ),
                                   const SizedBox(height: 6),
                                   Padding(
-                                    padding: const EdgeInsets.only(
-                                      left: 29,
-                                    ),
+                                    padding: const EdgeInsets.only(left: 29),
                                     child: Column(
                                       children: [
                                         _requirementRow(
@@ -426,8 +413,7 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
                                         _requirementRow(
                                           text:
                                           'Include at least one special character (e.g. @ # \$)',
-                                          satisfied:
-                                          _hasSpecialCharacter,
+                                          satisfied: _hasSpecialCharacter,
                                         ),
                                       ],
                                     ),
@@ -435,10 +421,7 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
                                 ],
                               ),
                             ),
-
                             const SizedBox(height: 12),
-
-                            // Reset password button
                             SizedBox(
                               height: 45,
                               child: DecoratedBox(
@@ -452,19 +435,16 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
                                   borderRadius: BorderRadius.circular(30),
                                 ),
                                 child: ElevatedButton(
-                                  onPressed: _isLoading
-                                      ? null
-                                      : _resetPassword,
+                                  onPressed:
+                                  _isLoading ? null : _resetPassword,
                                   style: ElevatedButton.styleFrom(
                                     backgroundColor: Colors.transparent,
                                     disabledBackgroundColor:
                                     Colors.transparent,
                                     shadowColor: Colors.transparent,
-                                    foregroundColor:
-                                    AppColors.textOnPrimary,
+                                    foregroundColor: AppColors.textOnPrimary,
                                     shape: RoundedRectangleBorder(
-                                      borderRadius:
-                                      BorderRadius.circular(30),
+                                      borderRadius: BorderRadius.circular(30),
                                     ),
                                   ),
                                   child: _isLoading
@@ -482,8 +462,8 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
                                     children: [
                                       Text(
                                         'Reset Password',
-                                        style: AppTextStyles.button
-                                            .copyWith(
+                                        style:
+                                        AppTextStyles.button.copyWith(
                                           color: Colors.white,
                                           fontSize: 14,
                                           fontWeight: FontWeight.w600,
@@ -514,7 +494,6 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
   }
 }
 
-// Lock illustration
 class _ResetPasswordIllustration extends StatelessWidget {
   const _ResetPasswordIllustration();
 
@@ -540,8 +519,6 @@ class _ResetPasswordIllustration extends StatelessWidget {
               ),
             ),
           ),
-
-          // Lock shackle
           Positioned(
             top: 15,
             left: 72,
@@ -559,8 +536,6 @@ class _ResetPasswordIllustration extends StatelessWidget {
               ),
             ),
           ),
-
-          // Lock body
           Positioned(
             top: 43,
             left: 58,
@@ -590,8 +565,6 @@ class _ResetPasswordIllustration extends StatelessWidget {
               ),
             ),
           ),
-
-          // Circular reset symbol
           Positioned(
             right: 37,
             bottom: 24,
@@ -613,8 +586,6 @@ class _ResetPasswordIllustration extends StatelessWidget {
               ),
             ),
           ),
-
-          // Decorative rays
           Positioned(
             right: 20,
             top: 37,
@@ -663,7 +634,6 @@ class _ResetPasswordIllustration extends StatelessWidget {
   }
 }
 
-// Bottom decorative waves
 class _BottomWaves extends StatelessWidget {
   const _BottomWaves();
 

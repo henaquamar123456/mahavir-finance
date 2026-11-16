@@ -1,6 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:mahavir_finance/screens/admin_dasboard/admin_dasboard_screen.dart';
-import 'package:mahavir_finance/screens/admin_dasboard/admin_sell_screen.dart';
 import 'package:mahavir_finance/screens/auth/provider/auth_form_provider.dart';
 import 'package:mahavir_finance/screens/customer-section/calculator/emi_calculator_provider.dart';
 import 'package:mahavir_finance/screens/customer-section/loans/loan_inquiry_provider.dart';
@@ -54,7 +52,6 @@ class MahavirFinanceApp extends StatelessWidget {
       theme: AppTheme.lightTheme,
       initialRoute: AppRoutes.splash,
       onGenerateRoute: AppRouter.onGenerateRoute,
-      // home: AdminShellScreen(),
     );
   }
 }
