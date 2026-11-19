@@ -3,8 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
 
-import 'package:mahavir_finance/c_models/inquiry_model.dart';
 import '../../../../constants/api_urls.dart';
+import '../../../c_models/inquiry_model.dart';
 import '../../../core/servicess/shared_pref_helper.dart';
 
 class InquiryProvider extends ChangeNotifier {

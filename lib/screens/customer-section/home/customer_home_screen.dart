@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:mahavir_finance/screens/customer-section/loans/loans_screen.dart';
 import 'package:provider/provider.dart';
 import '../../../c_models/financial_service_model.dart';
 import '../../../c_models/loan_product_model.dart';
@@ -12,6 +11,7 @@ import '../blog/blog_list_screen.dart';
 import '../calculator/emi_calculator_screen.dart';
 import '../contact/contact_us_screen.dart';
 import '../loans/loan_details_screen.dart';
+import '../loans/loans_screen.dart';
 import '../notifications/notifications_screen.dart';
 import '../profile/profile_screen.dart';
 import '../services/service_details_screen.dart';

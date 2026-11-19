@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
-import 'package:mahavir_finance/screens/admin_dasboard/patners/patners_details_screen.dart';
+import 'package:mahavir_fincorp/screens/admin_dasboard/patners/patners_details_screen.dart';
 
 import '../../../../constants/api_urls.dart';
 import '../../../../constants/app_colors.dart';

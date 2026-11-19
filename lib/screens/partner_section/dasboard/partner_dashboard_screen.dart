@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:mahavir_finance/screens/customer-section/notifications/notifications_screen.dart';
-import 'package:mahavir_finance/screens/partner_section/customer/customer_list_screen.dart';
-import 'package:mahavir_finance/screens/partner_section/support/help_support_screen.dart';
+
 import 'package:provider/provider.dart';
 
 import '../../../../constants/app_colors.dart';
@@ -11,12 +9,15 @@ import '../../../../core/servicess/shared_pref_helper.dart';
 import '../../../../utils/currency_formatter.dart';
 import '../../../p_models/partner_model_screen.dart';
 import '../../auth/login/login_screen.dart';
+import '../../customer-section/notifications/notifications_screen.dart';
+import '../customer/customer_list_screen.dart';
 import '../earnings/earning_screen.dart';
 import '../leads/add_new_lead_screen.dart';
 import '../leads/lead_details_screen.dart';
 import '../leads/my_leads_screen.dart';
 import '../profile/profile_screen.dart';
 import '../providers/partner_dashboard_provider.dart';
+import '../support/help_support_screen.dart';
 
 class PartnerDashboardScreen extends StatelessWidget {
   const PartnerDashboardScreen({super.key});

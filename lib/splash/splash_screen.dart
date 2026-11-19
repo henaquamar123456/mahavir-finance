@@ -1,7 +1,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:mahavir_finance/splash/splash_provider.dart';
+import 'package:mahavir_fincorp/splash/splash_provider.dart';
 import 'package:provider/provider.dart';
 
 import '../constants/asset_constants.dart';

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:mahavir_finance/screens/customer-section/loans/what_happens_next_screen.dart';
+import 'package:mahavir_fincorp/screens/customer-section/loans/what_happens_next_screen.dart';
 import 'package:provider/provider.dart';
 
 import '../../../../constants/app_colors.dart';

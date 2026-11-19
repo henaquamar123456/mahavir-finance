@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
-import 'package:mahavir_finance/screens/auth/provider/auth_form_provider.dart';
-import 'package:mahavir_finance/screens/customer-section/calculator/emi_calculator_provider.dart';
-import 'package:mahavir_finance/screens/customer-section/loans/loan_inquiry_provider.dart';
-import 'package:mahavir_finance/screens/customer-section/loans/loans_provider.dart';
-import 'package:mahavir_finance/screens/customer-section/profile/profile_provider.dart';
-import 'package:mahavir_finance/splash/splash_provider.dart';
+import 'package:mahavir_fincorp/screens/auth/provider/auth_form_provider.dart';
+import 'package:mahavir_fincorp/screens/customer-section/calculator/emi_calculator_provider.dart';
+import 'package:mahavir_fincorp/screens/customer-section/loans/loan_inquiry_provider.dart';
+import 'package:mahavir_fincorp/screens/customer-section/loans/loans_provider.dart';
+import 'package:mahavir_fincorp/screens/customer-section/profile/profile_provider.dart';
+import 'package:mahavir_fincorp/splash/splash_provider.dart';
 import 'package:provider/provider.dart';
+
 import 'constants/theme/app_theme.dart';
 import 'core/routes/app_router.dart';
 import 'core/routes/app_routes.dart';
